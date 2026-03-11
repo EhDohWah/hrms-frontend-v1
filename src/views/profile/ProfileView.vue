@@ -1,0 +1,420 @@
+<template>
+  <div class="page-container">
+    <div class="profile-layout">
+      <!-- Profile Sidebar -->
+      <div class="profile-sidebar">
+        <a-card class="profile-card">
+          <div class="profile-avatar-area">
+            <div class="avatar-wrapper">
+              <a-avatar
+                :size="80"
+                :src="profilePictureUrl"
+                :style="!profilePictureUrl ? { backgroundColor: 'var(--color-primary)', fontSize: '28px', fontWeight: 700 } : {}"
+              >
+                {{ !profilePictureUrl ? userInitials : '' }}
+              </a-avatar>
+              <label class="avatar-upload" title="Upload photo">
+                <CameraOutlined />
+                <input type="file" accept="image/*" @change="handleProfileUpload" hidden />
+              </label>
+            </div>
+          </div>
+
+          <h3 class="profile-name">{{ authStore.userName }}</h3>
+          <p class="profile-email">{{ authStore.userEmail }}</p>
+
+          <div class="profile-roles">
+            <a-tag v-for="role in authStore.userRoles" :key="role" color="default">
+              {{ role }}
+            </a-tag>
+          </div>
+
+          <!-- Account timestamps -->
+          <div v-if="authStore.user" class="profile-timestamps">
+            <div v-if="authStore.user.last_login_at" class="timestamp-item">
+              <span class="meta-label">Last Login</span>
+              <span class="meta-value">{{ formatDate(authStore.user.last_login_at) }}</span>
+            </div>
+            <div v-if="authStore.user.created_at" class="timestamp-item">
+              <span class="meta-label">Created</span>
+              <span class="meta-value">{{ formatDate(authStore.user.created_at) }}</span>
+            </div>
+          </div>
+        </a-card>
+      </div>
+
+      <!-- Main content -->
+      <div class="profile-main">
+        <!-- Edit Profile -->
+        <a-card title="Profile Information" class="settings-card">
+          <a-form layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="Display Name">
+                  <a-input
+                    v-model:value="profileForm.name"
+                    placeholder="Your display name"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="Email Address">
+                  <a-input
+                    v-model:value="profileForm.email"
+                    placeholder="Your email address"
+                    type="email"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-button
+              type="primary"
+              :loading="profileSaving"
+              :disabled="!isProfileDirty"
+              @click="handleProfileSave"
+            >
+              Save Changes
+            </a-button>
+          </a-form>
+        </a-card>
+
+        <!-- Change Password -->
+        <a-card title="Change Password" class="settings-card">
+          <a-form layout="vertical" @finish="handlePasswordChange" :model="passwordForm">
+            <a-row :gutter="16">
+              <a-col :span="8">
+                <a-form-item label="Current Password" name="current_password">
+                  <a-input-password v-model:value="passwordForm.current_password" placeholder="Current password" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="New Password" name="new_password">
+                  <a-input-password v-model:value="passwordForm.new_password" placeholder="New password" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="Confirm New Password" name="confirm_password">
+                  <a-input-password v-model:value="passwordForm.confirm_password" placeholder="Confirm new password" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-button type="primary" html-type="submit" :loading="passwordLoading">
+              Update Password
+            </a-button>
+          </a-form>
+        </a-card>
+
+        <!-- Permissions Overview -->
+        <a-card title="My Permissions" class="settings-card">
+          <div v-if="Object.keys(authStore.permissions).length" class="permissions-grid">
+            <div
+              v-for="(perm, moduleName) in authStore.permissions"
+              :key="moduleName"
+              class="perm-item"
+            >
+              <div class="perm-header">
+                <span class="perm-module">{{ perm.display_name || moduleName }}</span>
+                <a-tag v-if="perm.category" size="small">{{ perm.category }}</a-tag>
+              </div>
+              <div class="perm-badges">
+                <a-tag :color="perm.read ? 'green' : 'default'" size="small">Read</a-tag>
+                <a-tag :color="perm.edit ? 'blue' : 'default'" size="small">Edit</a-tag>
+              </div>
+            </div>
+          </div>
+          <a-empty v-else description="No permissions assigned" />
+        </a-card>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, watch, onMounted, inject } from 'vue'
+import { message } from 'ant-design-vue'
+import { CameraOutlined } from '@ant-design/icons-vue'
+import { useAppStore } from '@/stores/uiStore'
+import { useAuthStore } from '@/stores/auth'
+import { userApi } from '@/api'
+
+const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
+const dayjs = inject('$dayjs')
+const appStore = useAppStore()
+const authStore = useAuthStore()
+
+// ---- Profile form ----
+const profileForm = reactive({
+  name: authStore.userName || '',
+  email: authStore.userEmail || '',
+})
+const profileSaving = ref(false)
+
+// Keep form in sync when auth store loads/updates user data
+watch(() => authStore.user, (newUser) => {
+  if (newUser) {
+    profileForm.name = newUser.name || ''
+    profileForm.email = newUser.email || ''
+  }
+}, { immediate: true })
+
+const isProfileDirty = computed(() => {
+  return profileForm.name !== (authStore.userName || '')
+    || profileForm.email !== (authStore.userEmail || '')
+})
+
+// ---- Password form ----
+const passwordForm = reactive({ current_password: '', new_password: '', confirm_password: '' })
+const passwordLoading = ref(false)
+
+// ---- Computed ----
+const userInitials = computed(() => {
+  const name = authStore.userName || ''
+  return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+})
+
+const profilePictureUrl = computed(() => {
+  const pic = authStore.userAvatar
+  if (!pic) return null
+  if (pic.startsWith('http')) return pic
+  return `${PUBLIC_URL}/storage/${pic}`
+})
+
+function formatDate(date) {
+  return date ? dayjs(date).format('DD MMM YYYY') : '—'
+}
+
+// ---- Profile save ----
+async function handleProfileSave() {
+  if (!profileForm.name?.trim()) {
+    message.warning('Display name is required')
+    return
+  }
+
+  profileSaving.value = true
+  try {
+    const promises = []
+    const updates = {}
+
+    // Update name if changed
+    if (profileForm.name !== authStore.userName) {
+      promises.push(userApi.updateUsername({ name: profileForm.name }))
+      updates.name = profileForm.name
+    }
+
+    // Update email if changed
+    if (profileForm.email !== authStore.userEmail) {
+      if (!profileForm.email?.trim()) {
+        message.warning('Email is required')
+        profileSaving.value = false
+        return
+      }
+      promises.push(userApi.updateEmail({ email: profileForm.email }))
+      updates.email = profileForm.email
+    }
+
+    if (promises.length > 0) {
+      await Promise.all(promises)
+      // Update local auth store state
+      authStore.updateUserFromEvent(updates)
+      authStore.broadcastProfileUpdate(updates)
+      message.success('Profile updated successfully')
+    }
+  } catch (err) {
+    const resp = err.response?.data
+    if (resp?.errors) {
+      const firstErr = Object.values(resp.errors)[0]
+      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+    } else {
+      message.error(resp?.message || 'Failed to update profile')
+    }
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+// ---- Password change ----
+async function handlePasswordChange() {
+  if (!passwordForm.current_password || !passwordForm.new_password) {
+    message.warning('Please fill in all password fields')
+    return
+  }
+  if (passwordForm.new_password !== passwordForm.confirm_password) {
+    message.error('New passwords do not match')
+    return
+  }
+  passwordLoading.value = true
+  try {
+    await userApi.updatePassword(passwordForm)
+    message.success('Password updated successfully')
+    Object.assign(passwordForm, { current_password: '', new_password: '', confirm_password: '' })
+  } catch (err) {
+    const resp = err.response?.data
+    if (resp?.errors) {
+      const firstErr = Object.values(resp.errors)[0]
+      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+    } else {
+      message.error(resp?.message || 'Failed to update password')
+    }
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
+// ---- Profile picture upload ----
+async function handleProfileUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    message.warning('Please select an image file')
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    message.warning('Image must be under 2MB')
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('profile_picture', file)
+  try {
+    const { data } = await userApi.updateProfilePicture(formData)
+    const updates = {
+      profile_picture: data.data?.profile_picture || data.profile_picture,
+    }
+    authStore.updateUserFromEvent(updates)
+    authStore.broadcastProfileUpdate(updates)
+    message.success('Profile picture updated')
+  } catch (err) {
+    message.error(err.response?.data?.message || 'Failed to upload picture')
+  }
+  event.target.value = ''
+}
+
+onMounted(() => appStore.setPageMeta('My Profile'))
+</script>
+
+<style scoped>
+.profile-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (min-width: 768px) {
+  .profile-layout {
+    grid-template-columns: 280px 1fr;
+  }
+}
+
+/* Sidebar */
+.profile-card {
+  text-align: center;
+}
+
+.profile-avatar-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+  padding-top: 8px;
+}
+
+.avatar-wrapper {
+  position: relative;
+}
+
+.avatar-upload {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 26px;
+  height: 26px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  transition: all var(--transition-fast);
+}
+.avatar-upload:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.profile-email {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 12px;
+}
+.profile-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.profile-timestamps {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.timestamp-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.meta-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.meta-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+/* Main content */
+.settings-card {
+  margin-bottom: 16px;
+}
+
+.permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.perm-item {
+  padding: 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+.perm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.perm-module {
+  font-weight: 600;
+  font-size: 13px;
+}
+.perm-badges {
+  display: flex;
+  gap: 4px;
+}
+
+</style>

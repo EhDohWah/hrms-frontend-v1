@@ -1,0 +1,76 @@
+<template>
+  <a-layout class="app-layout">
+    <!-- Mobile overlay -->
+    <div
+      v-if="appStore.mobileSidebarOpen"
+      class="mobile-overlay"
+      @click="appStore.closeMobileSidebar()"
+    />
+    <AppSidebar />
+    <a-layout class="main-area" :style="{ marginLeft: appStore.sidebarWidth }">
+      <AppHeader />
+      <a-layout-content class="main-content">
+        <router-view />
+      </a-layout-content>
+    </a-layout>
+  </a-layout>
+</template>
+
+<script setup>
+import { onMounted, onUnmounted } from 'vue'
+import { useAppStore } from '@/stores/uiStore'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
+import { subscribeUserChannels, destroyEcho } from '@/plugins/echo'
+import AppSidebar from '@/components/layout/AppSidebar.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+
+const appStore = useAppStore()
+const authStore = useAuthStore()
+const notifStore = useNotificationStore()
+
+onMounted(async () => {
+  window.addEventListener('resize', appStore.handleResize)
+  notifStore.startPolling()
+
+  if (authStore.user?.id) {
+    await subscribeUserChannels(authStore.user.id, {
+      authStore,
+      notificationStore: notifStore,
+    })
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', appStore.handleResize)
+  notifStore.stopPolling()
+  destroyEcho()
+})
+</script>
+
+<style scoped>
+.app-layout {
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+.main-area {
+  transition: margin-left var(--transition-slow);
+  background: var(--color-bg);
+}
+.main-content {
+  margin-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
+  background: var(--color-bg);
+}
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+}
+@media (min-width: 768px) {
+  .mobile-overlay {
+    display: none;
+  }
+}
+</style>

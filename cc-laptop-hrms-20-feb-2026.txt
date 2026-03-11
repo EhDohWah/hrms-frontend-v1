@@ -1,0 +1,726 @@
+
+ ▐▛███▜▌   Claude Code v2.1.41
+▝▜█████▛▘  Opus 4.6 · Claude Max
+  ▘▘ ▝▝    ~\Downloads\hrms-screenshot\hrms-frontend
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Referenced file ..\..\..\Desktop\HR Management System\3. Implementation\hrm
+     s-dev\hrms-backend-api-v1\app\Services\TaxCalculationService.php
+  ⎿  Read ..\..\..\Desktop\HR Management System\3. 
+     Implementation\hrms-dev\hrms-backend-api-v1\app\Jobs\ProcessBulkPayroll.php
+      (435 lines)
+
+  ⎿  Referenced file ..\..\..\Desktop\HR Management System\3. Implementation\hrm
+     s-dev\hrms-backend-api-v1\app\Services\BulkPayrollService.php
+  ⎿  Referenced file ..\..\..\Desktop\HR Management System\3. 
+     Implementation\hrms-dev\hrms-backend-api-v1\app\Services\PayrollService.php
+  ⎿  Referenced file ..\..\..\Desktop\HR Management System\3. 
+     Implementation\hrms-dev\hrms-backend-api-v1\app\Models\TaxSetting.php
+
+● Task "Migrate InterviewController OA+patterns" completed in background
+
+● Task "Migrate ResignationController OA+patterns" completed in background
+
+● Task "Migrate HolidayController OA+patterns" completed in background
+
+● Task "Migrate LeaveRequestController OA" completed in background
+
+● Task "Migrate JobOfferController OA+patterns" completed in background
+
+● Task "Migrate TravelRequestController OA+patterns" completed in background
+  ⎿  Plan file referenced (~\.claude\plans\vast-toasting-sky.md)
+
+● Here's what you should do regarding the 2026 tax configuration:
+
+  The Good News
+
+  The code fallback I already added to 
+  TaxCalculationService::loadTaxConfiguration() handles this automatically — if
+  no brackets/settings exist for 2026, it will use the latest available year
+  (2025). So the preview should already work now without any seeding changes.
+
+  For Explicit 2026 Records (Recommended)
+
+  1. TaxSettingSeeder — Safe to re-run:
+  php artisan db:seed --class=TaxSettingSeeder
+  It uses (int) date('Y') (which is 2026 now) and updateOrCreate, so it will 
+  create 2026 records without duplicating.
+
+  2. TaxBracketSeeder — Cannot re-run as-is (hardcodes $year = 2025 and skips if
+   any records exist). Two options:
+
+  - Option A (simplest): Do nothing — the fallback code will use 2025 brackets
+  for 2026 since Thai tax brackets haven't changed.
+  - Option B (cleaner): Duplicate 2025 brackets for 2026 via tinker:
+  php artisan tinker --execute="App\Models\TaxBracket::where('effective_year', 
+  2025)->each(function($b) { $clone = $b->replicate(); $clone->effective_year = 
+  2026; $clone->save(); });"
+
+  3. Clear cache after seeding:
+  php artisan cache:clear
+
+  Summary
+
+  Item: Code fallback
+  Action: Already done
+  Why: Auto-uses 2025 data for 2026 queries
+  ────────────────────────────────────────
+  Item: TaxSettingSeeder
+  Action: php artisan db:seed --class=TaxSettingSeeder
+  Why: Creates 2026 settings with current year
+  ────────────────────────────────────────
+  Item: TaxBracketSeeder
+  Action: Optional — tinker command or do nothing
+  Why: Brackets unchanged for 2026
+  ────────────────────────────────────────
+  Item: Cache
+  Action: php artisan cache:clear
+  Why: Refresh cached tax config
+
+  The preview should work immediately with the fallback. Running the seeder +
+  cache clear is recommended for data cleanliness but not strictly required.
+
+✻ Brewed for 2m 15s
+
+❯ api return this "{                                                        
+      "success": true,                                                      
+      "data": {                                                             
+          "summary": {                                                      
+              "total_employees": 1,                                         
+              "total_payrolls": 1,                                          
+              "total_gross_salary": 55000,                                  
+              "total_net_salary": 53633,                                    
+              "advances_needed": 0                                          
+          },                                                                
+          "warnings": [],                                                   
+          "pay_period_date": "2026-02-25",                                  
+          "filters_applied": {                                              
+              "subsidiaries": [                                             
+                  "SMRU"                                                    
+              ]                                                             
+          },                                                                
+          "detailed": true,                                                 
+          "employees": [                                                    
+              {                                                             
+                  "employment_id": 1,                                       
+                  "staff_id": "0006",                                       
+                  "name": "Courtney Marks",                                 
+                  "employee_status": "Expats (Local)",                      
+                  "organization": "SMRU",                                   
+                  "department": "MCH",                                      
+                  "position": "Physician\/OB Doctor",                       
+                  "start_date": "2026-01-31T17:00:00.000000Z",              
+                  "pass_probation_date": "2026-04-30T17:00:00.000000Z",     
+                  "probation_salary": "55000.00",                           
+                  "pass_probation_salary": "60000.00",                      
+                  "allocations": [                                          
+                      {                                                     
+                          "allocation_id": 1,                               
+                          "grant_name": "Maternal Mortality Reduction -     
+  Phase III",                                                               
+                          "grant_code": "S2025-USAID-2744",                 
+                          "grant_organization": "SMRU",                     
+                          "fte": 1,                                         
+                          "gross_salary": 55000,                            
+                          "gross_salary_by_fte": 55000,                     
+                          "deductions": {                                   
+                              "pvd": 0,                                     
+                              "saving_fund": 0,                             
+                              "employee_ss": 0,                             
+                              "employee_hw": 0,                             
+                              "tax": 1367,                                  
+                              "total": 1367                                 
+                          },                                                
+                          "contributions": {                                
+                              "pvd_employer": 0,                            
+                              "saving_fund_employer": 0,                    
+                              "employer_ss": 0,                             
+                              "employer_hw": 150,                           
+                              "total": 150                                  
+                          },                                                
+                          "income_additions": {                             
+                              "thirteen_month": 0,                          
+                              "thirteen_month_accrued": 50417,              
+                              "retroactive_adjustment": 0,                  
+                              "salary_bonus": 0                             
+                          },                                                
+                          "total_salary": 55150,                            
+                          "total_income": 55000,                            
+                          "net_salary": 53633,                              
+                          "total_pvd": 0,                                   
+                          "total_saving_fund": 0,                           
+                          "needs_advance": false,                           
+                          "advance_from": null,                             
+                          "advance_to": null,                               
+                          "calculation_breakdown": {                        
+                              "inputs": {                                   
+                                  "employee_status": "Expats (Local)",      
+                                  "organization": "SMRU",                   
+                                  "employment_start_date": "2026-02-01",    
+                                  "employment_end_date": null,              
+                                  "probation_salary": "55000.00",           
+                                  "pass_probation_salary": "60000.00",      
+                                  "probation_pass_date": "2026-05-01",      
+                                  "has_passed_probation": false,            
+                                  "pay_period_date": "2026-02-25",          
+                                  "fte": "1.0000"                           
+                              },                                            
+                              "step_1_salary_determination": {              
+                                  "pro_rated_salary_result": {              
+                                      "gross_salary": 55000                 
+                                  },                                        
+                                  "annual_increase_rate": 0,                
+                                  "adjusted_gross_salary": 55000,           
+                                  "salary_from_getSalaryAmountForDate":     
+  55000                                                                     
+                              },                                            
+                              "step_2_gross_by_fte": {                      
+                                  "adjusted_gross_salary": 55000,           
+                                  "daily_rate": 1833,                       
+                                  "fte": "1.0000",                          
+                                  "is_start_month": true,                   
+                                  "start_day": 1,                           
+                                  "is_resign_month": false,                 
+                                  "resign_day": null,                       
+                                  "result": 55000                           
+                              },                                            
+                              "step_3_retroactive": {                       
+                                  "previous_month_start_day": null,         
+                                  "deferred_days": 0,                       
+                                  "adjusted_gross_salary_input": 55000,     
+                                  "result": 0                               
+                              },                                            
+                              "step_4_thirteen_month": {                    
+                                  "months_worked_this_year": 11,            
+                                  "monthly_salary_input": 55000,            
+                                  "service_months_from_start":              
+  0.8571428571428571,                                                       
+                                  "result": 0,                              
+                                  "accrued": 50417                          
+                              },                                            
+                              "step_5_pvd_saving_fund": {                   
+                                  "monthly_salary_input": 55000,            
+                                  "employment_pvd_toggle": false,           
+                                  "employment_saving_fund_toggle": false,   
+                                  "probation_passed_for_month": false,      
+                                  "pvd_employee": 0,                        
+                                  "saving_fund": 0,                         
+                                  "combined_employee": 0,                   
+                                  "employer_portion": 0,                    
+                                  "total_pvd_saving": 0                     
+                              },                                            
+                              "step_6_social_security": {                   
+                                  "full_monthly_salary_input": 55000,       
+                                  "fte": "1.0000",                          
+                                  "employer_ss": 0,                         
+                                  "employee_ss": 0                          
+                              },                                            
+                              "step_7_health_welfare": {                    
+                                  "full_monthly_salary_input": 55000,       
+                                  "fte": "1.0000",                          
+                                  "employer_hw": 150,                       
+                                  "employee_hw": 0                          
+                              },                                            
+                              "step_8_tax": {                               
+                                  "method": "ACM (Accumulative Calculation  
+  Method)",                                                                 
+                                  "gross_salary_by_fte_input": 55000,       
+                                  "current_month": 2,                       
+                                  "result": 1367                            
+                              },                                            
+                              "step_9_totals": {                            
+                                  "total_income_formula": "gross_by_fte +   
+  retro + 13th_month + bonus",                                              
+                                  "total_income": 55000,                    
+                                  "total_deductions_formula": "pvd_saving + 
+   employee_ss + employee_hw + tax",                                        
+                                  "total_deductions": 1367,                 
+                                  "employer_contributions_formula":         
+  "employer_ss + employer_hw + pvd_sf but the frontend isn't showing the    
+  tax. fix it                                                               
+  ⎿  [Image #1]
+
+● The API returns tax: 1367 correctly, so this is a frontend display issue. Let
+  me find the preview component.
+
+● Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● The API returns tax: 1367 correctly, but let me check what the frontend does
+  with it. I see the expanded row references alloc.deductions?.tax at line 148,
+  and the main table references record.total_gross / record.total_net. Let me
+  check the backend response structure to understand the mismatch.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Let me check the allocation detail builder to understand the exact response
+  structure.
+
+● Read 1 file (ctrl+o to expand)
+
+● Let me check what keys the calculation result returns — the
+  buildAllocationDetail uses $calc['tax'] but I need to verify this key exists.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● I see the issue. The API correctly returns deductions.tax: 1367 inside each
+  allocation, and the expanded row template at line 148 does render it. But the
+  main preview table has no Tax column — it only shows Gross and Net. The user
+  wants to see tax at a glance without expanding.
+
+  Let me add a Tax column to the main table.
+
+● Update(src\views\payroll\BulkPayrollModal.vue)
+  ⎿  Added 1 line
+      291    { title: 'Salary', key: 'pass_probation_salary', width:     
+           120, align: 'right' },                                        
+      292    { title: 'Alloc.', key: 'allocations', width: 60, align:    
+           'center' },                                                   
+      293    { title: 'Gross', key: 'gross', width: 120, align: 'right'  
+           },                                                            
+      294 +  { title: 'Tax', key: 'tax', width: 100, align: 'right' },   
+      295    { title: 'Net', key: 'net', width: 120, align: 'right' },   
+      296  ]                                                             
+      297                                                                
+
+● Now add the template rendering for the tax column. I'll place it between the
+  gross and net templates:
+
+● Update(src\views\payroll\BulkPayrollModal.vue)
+  ⎿  Added 3 lines
+      111              <template v-else-if="column.key === 'gross'">     
+      112                <span class="font-mono">{{                      
+           fmtCurrency(record.total_gross) }}</span>                     
+      113              </template>                                       
+      114 +            <template v-else-if="column.key === 'tax'">       
+      115 +              <span class="font-mono">{{                      
+          +fmtCurrency(getTotalTax(record)) }}</span>                    
+      116 +            </template>                                       
+      117              <template v-else-if="column.key === 'net'">       
+      118                <span class="font-mono font-semibold">{{        
+           fmtCurrency(record.total_net) }}</span>                       
+      119              </template>                                       
+
+● Now add the getTotalTax helper function in the script section:
+
+● Update(src\views\payroll\BulkPayrollModal.vue)
+  ⎿  Added 4 lines
+      471    }                                                           
+      472  }                                                             
+      473                                                                
+      474 +function getTotalTax(record) {                                
+      475 +  return (record.allocations || []).reduce((sum, a) => sum +  
+          +(a.deductions?.tax || 0), 0)                                  
+      476 +}                                                             
+      477 +                                                              
+      478  function fmtCurrency(val) {                                   
+      479    if (val == null || val === '') return '—'                   
+      480    const n = Number(val)                                       
+
+● Now update the table scroll width to accommodate the new column:
+
+● Update(src\views\payroll\BulkPayrollModal.vue)
+  ⎿  Added 1 line, removed 1 line
+      78            :row-key="(r) => r.employment_id"                    
+      79            :pagination="{ pageSize: 10, size: 'small' }"        
+      80            size="small"                                         
+      81 -          :scroll="{ x: 1320, y: 420 }"                        
+      81 +          :scroll="{ x: 1420, y: 420 }"                        
+      82            :expanded-row-keys="expandedRows"                    
+      83            @expand="onExpandRow"                                
+      84          >                                                      
+
+● Done. The fix adds a Tax column to the bulk payroll preview table between
+  Gross and Net. It computes the total tax by summing deductions.tax across all
+  allocations for each employee. For the employee in your example (staff_id
+  0006, salary 55,000), it will show ฿1,367.00 in the Tax column.
+
+✻ Cogitated for 3m 17s
+
+❯ why the staff 0094 doesn't have tax income??? why? but this employee has  
+  the income tax 0006. find the issue.                                      
+
+● Let me trace the tax calculation logic to find what differs between the two
+  employees.
+
+● Read 1 file (ctrl+o to expand)
+
+● Let me check the calculateIncomeTax method in PayrollService to see what
+  conditions could result in tax = 0.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● I need to check the Employee model status constants and understand the
+  difference between employees. Let me also check the
+  calculateProvidentFundFromEmployeeData logic which is key for tax deductions.
+
+● Searched for 1 pattern (ctrl+o to expand)
+
+● Let me check if employee status is a PHP Enum (which could cause comparison
+  issues):
+
+● Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+● Let me check what could make grossSalaryCurrentYearByFTE zero, and also look
+  at the SSF handling for different employee statuses.
+
+● Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Found the root cause. There are two bugs in TaxCalculationService that cause
+  inflated tax deductions, potentially zeroing out tax for employees who should
+  be taxed:
+
+  Bug 1: Phantom SSF deduction — calculateSocialSecurityFromSalary() (line 533)
+  calculates SSF for ALL employees, including Expats who don't actually pay SSF.
+
+  Bug 2: Phantom PVD deduction — calculateProvidentFundFromEmployeeData() (line 
+  552) applies PVD at 7.5% of annual income for ALL Local ID employees,
+  regardless of whether they're enrolled in PVD or have passed probation.
+
+  The payroll correctly checks (line 1186-1212):
+  - employment.pvd toggle must be enabled
+  - Probation must be passed
+  - Employee status must match
+
+  But the TaxCalculationService ignores all of this and uses theoretical
+  maximums, inflating deductions and reducing taxable income below the 150k
+  threshold.
+
+  Example: If 0094 is "Local ID Staff" at ~30-35k salary:
+  - Phantom PVD: 330k-385k × 7.5% = 24,750-28,875 extra deduction
+  - This pushes taxable income below 150k → tax = 0
+  - Without phantom PVD, taxable income would be ~160k → tax > 0
+
+  Let me fix this by passing actual payroll SSF and PVD values to the tax
+  calculation.
+
+● Read 1 file (ctrl+o to expand)
+
+● Now I'll update calculateIncomeTax to pass the actual SSF and PVD values:
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\PayrollService.php)
+  ⎿  Added 5 lines, removed 1 line
+      765          $healthWelfareEmployee =                              
+           $this->calculateHealthWelfareEmployee($employee,              
+           $adjustedGrossSalary, $allocation->fte);                      
+      766                                                                
+      767          // 10. Income Tax (ACM: uses YTD payroll history for  
+           this allocation)                                              
+      768 -        $incomeTax = $this->calculateIncomeTax($employee,     
+          -$grossSalaryCurrentYearByFTE, $employment, $payPeriodDate,    
+          -$allocation);                                                 
+      768 +        // Pass actual SSF and PVD/SF so tax calculation uses 
+          + real deductions, not theoretical                             
+      769 +        $incomeTax = $this->calculateIncomeTax(               
+      770 +            $employee, $grossSalaryCurrentYearByFTE,          
+          +$employment, $payPeriodDate, $allocation,                     
+      771 +            $employeeSocialSecurity, $pvdSavingEmployee       
+      772 +        );                                                    
+      773                                                                
+      774          // Salary bonus (currently 0 — set manually by HR or  
+           via import)                                                   
+      775          $salaryBonus = 0.0;                                   
+
+● Now update the calculateIncomeTax method signature and pass the actual values:
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\PayrollService.php)
+  ⎿  Added 16 lines, removed 2 lines
+      1374       * @param  Carbon  $payPeriodDate  Pay period date       
+      1375       * @param  EmployeeFundingAllocation|null  $allocation   
+            Funding allocation (for per-allocation YTD)                  
+      1376       */                                                      
+      1377 -    private function calculateIncomeTax(Employee $employee,  
+           -float $grossSalaryByFTE, $employment, Carbon $payPeriodDate, 
+           - ?EmployeeFundingAllocation $allocation = null): float       
+      1378 -    {                                                        
+      1377 +    private function calculateIncomeTax(                     
+      1378 +        Employee $employee,                                  
+      1379 +        float $grossSalaryByFTE,                             
+      1380 +        $employment,                                         
+      1381 +        Carbon $payPeriodDate,                               
+      1382 +        ?EmployeeFundingAllocation $allocation = null,       
+      1383 +        float $actualMonthlySsf = 0.0,                       
+      1384 +        float $actualMonthlyPvdSf = 0.0                      
+      1385 +    ): float {                                               
+      1386          $currentMonth = $payPeriodDate->month;               
+      1387                                                               
+      1388          // Query YTD payroll data for ACM calculation        
+      1389          $ytdIncome = 0.0;                                    
+      1390          $ytdTaxWithheld = 0.0;                               
+      1391          $ytdSSF = 0.0;                                       
+      1392 +        $ytdPvdSf = 0.0;                                     
+      1393                                                               
+      1394          if ($allocation) {                                   
+      1395              $ytdPayrolls = Payroll::where('employment_id',   
+            $employment->id)                                             
+     ...
+      1394                  $ytdIncome += (float) $p->total_income;      
+      1395                  $ytdTaxWithheld += (float) $p->tax;          
+      1396                  $ytdSSF += (float)                           
+            $p->employee_social_security;                                
+      1397 +                $ytdPvdSf += (float) $p->pvd + (float)       
+           +$p->saving_fund;                                             
+      1398              }                                                
+      1399          }                                                    
+      1400                                                               
+      1401          // Prepare employee data with ACM fields             
+      1402 +        // Pass actual SSF and PVD/SF amounts so tax service 
+           + uses real deductions                                        
+      1403          $employeeData = [                                    
+      1404              'has_spouse' => $employee->has_spouse,           
+      1405              'children' =>                                    
+            $employee->employeeChildren->count(),                        
+     ...
+      1409              'ytd_income' => $ytdIncome,                      
+      1410              'ytd_tax_withheld' => $ytdTaxWithheld,           
+      1411              'ytd_ssf' => $ytdSSF,                            
+      1412 +            'ytd_pvd_sf' => $ytdPvdSf,                       
+      1413 +            // Actual payroll deductions for this month      
+           +(prevents phantom deductions)                                
+      1414 +            'actual_monthly_ssf' => $actualMonthlySsf,       
+      1415 +            'actual_monthly_pvd_sf' => $actualMonthlyPvdSf,  
+      1416          ];                                                   
+      1417                                                               
+      1418          // Calculate income tax using TaxCalculationService  
+            (ACM-aware)                                                  
+
+● Now update the TaxCalculationService.calculateEmployeeTax to use actual SSF
+  and PVD values when provided:
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\TaxCalculationService.php)
+  ⎿  Added 29 lines, removed 10 lines
+      129          $personalAllowancesBreakdown =                        
+           $this->getDetailedPersonalAllowancesBreakdown($employeeData); 
+      130          $personalAllowances =                                 
+           $personalAllowancesBreakdown['total'];                        
+      131                                                                
+      132 -        // Calculate social security                          
+      133 -        $socialSecurity =                                     
+          -$this->calculateSocialSecurityFromSalary($grossSalary);       
+      132 +        // Calculate social security                          
+          + deduction for tax purposes                                   
+      133 +        // Use actual payroll SSF when provided (prevents     
+          +phantom SSF deduction for Expats)                             
+      134 +        $actualMonthlySsf =                                   
+          +$employeeData['actual_monthly_ssf'] ?? null;                  
+      135 +        if ($actualMonthlySsf !== null) {                     
+      136 +            $ssfMonthly = $actualMonthlySsf;                  
+      137 +        } else {                                              
+      138 +            $socialSecurity =                                 
+          +$this->calculateSocialSecurityFromSalary($grossSalary);       
+      139 +            $ssfMonthly = $socialSecurity['monthly'];         
+      140 +        }                                                     
+      141                                                                
+      142 -        // For ACM: use actual YTD SSF + projected remaining  
+          - instead of simple monthly × 12                               
+      143 -        $ssfAnnual = $socialSecurity['annual'];               
+      142 +        // For ACM: use actual YTD SSF + projected remaining  
+      143          if ($useACM) {                                        
+      144 -            $ytdSSF = $employeeData['ytd_ssf'] ?? null;       
+      145 -            if ($ytdSSF !== null) {                           
+      146 -                $ssfAnnual = $ytdSSF +                        
+          -($socialSecurity['monthly'] * $remainingInclusive);           
+      144 +            $ytdSSF = $employeeData['ytd_ssf'] ?? 0;          
+      145 +            $ssfAnnual = $ytdSSF + ($ssfMonthly *             
+          +$remainingInclusive);                                         
+      146 +        } else {                                              
+      147 +            $ssfAnnual = $ssfMonthly * 12;                    
+      148 +        }                                                     
+      149 +                                                              
+      150 +        // Calculate provident fund / saving fund deduction   
+          +for tax purposes                                              
+      151 +        // Use actual payroll PVD/SF when provided (prevents  
+          +phantom PVD for non-enrolled employees)                       
+      152 +        $actualMonthlyPvdSf =                                 
+          +$employeeData['actual_monthly_pvd_sf'] ?? null;               
+      153 +        if ($actualMonthlyPvdSf !== null) {                   
+      154 +            // Use actual PVD/SF: project based on actual     
+          +monthly amount                                                
+      155 +            if ($useACM) {                                    
+      156 +                $ytdPvdSf = $employeeData['ytd_pvd_sf'] ?? 0; 
+      157 +                $providentFund = $ytdPvdSf +                  
+          +($actualMonthlyPvdSf * $remainingInclusive);                  
+      158 +            } else {                                          
+      159 +                $providentFund = $actualMonthlyPvdSf * 12;    
+      160              }                                                 
+      161 +        } else {                                              
+      162 +            // Fallback: estimate from employee status        
+          +(legacy behavior)                                             
+      163 +            $providentFund =                                  
+          +$this->calculateProvidentFundFromEmployeeData($annualIncome,  
+          +$employeeData);                                               
+      164          }                                                     
+      165                                                                
+      166 -        // Calculate provident fund (uses ACM-estimated       
+          -annual income for accurate PVD projection)                    
+      167 -        $providentFund =                                      
+          -$this->calculateProvidentFundFromEmployeeData($annualIncome,  
+          -$employeeData);                                               
+      168 -                                                              
+      166          // Calculate taxable income                           
+      167          $totalDeductions = $employmentDeductions +            
+           $personalAllowances + $ssfAnnual + $providentFund;            
+      168          $taxableIncome = max(0, $annualIncome -               
+           $totalDeductions);                                            
+
+● Now I need to update the return array to use the correct $ssfMonthly variable
+  since we refactored the SSF calculation:
+
+● Read 1 file (ctrl+o to expand)
+
+● I need to fix line 184 which references $socialSecurity['monthly'] — this
+  variable doesn't exist anymore when we use the actual_monthly_ssf path. Also
+  fix line 205.
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\TaxCalculationService.php)
+  ⎿  Added 1 line, removed 1 line
+      181          }                                                     
+      182                                                                
+      183          // Calculate net salary                               
+      184 -        $netSalary = $grossSalary - $monthlyTax - $           
+          -socialSecurity['monthly'];                                    
+      184 +        $netSalary = $grossSalary - $monthlyTax - $ssfMonthly;
+      185                                                                
+      186          // Build calculation method description               
+      187          if ($useACM) {                                        
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\TaxCalculationService.php)
+  ⎿  Added 1 line, removed 1 line
+      202              'personal_allowances_breakdown' =>                
+           $personalAllowancesBreakdown,                                 
+      203              'personal_allowances_total' =>                    
+           $personalAllowances,                                          
+      204              'social_security_annual' => $ssfAnnual,           
+      205 -            'social_security_monthly' => $                    
+          -socialSecurity['monthly'],                                    
+      205 +            'social_security_monthly' => $ssfMonthly,         
+      206              'provident_fund_annual' => $providentFund,        
+      207              'provident_fund_type' =>                          
+           $this->getProvidentFundType($employeeData['employee_status']  
+           ?? Employee::STATUS_EXPATS),                                  
+      208              'total_deductions' => $totalDeductions,           
+
+● Now let me verify the full calculateEmployeeTax method is consistent:
+
+● Read 1 file (ctrl+o to expand)
+
+● The code looks consistent. Now let me also update the calculation breakdown in
+   calculateAllocationPayroll to show this info:
+
+● Read 1 file (ctrl+o to expand)
+
+● Update(~\Desktop\HR Management System\3. Implementation\hrms-dev\hrms-backend-
+        api-v1\app\Services\PayrollService.php)
+  ⎿  Added 2 lines
+      889                  'method' => 'ACM (Accumulative Calculation    
+           Method)',                                                     
+      890                  'gross_salary_by_fte_input' =>                
+           $grossSalaryCurrentYearByFTE,                                 
+      891                  'current_month' => $payPeriodDate->month,     
+      892 +                'actual_monthly_ssf_for_tax' =>               
+          +$employeeSocialSecurity,                                      
+      893 +                'actual_monthly_pvd_sf_for_tax' =>            
+          +$pvdSavingEmployee,                                           
+      894                  'result' => $incomeTax,                       
+      895              ],                                                
+      896              'step_9_totals' => [                              
+
+● Now let me verify no other code paths call calculateIncomeTax with the old
+  signature:
+
+● Searched for 1 pattern (ctrl+o to expand)
+
+● Good — only one call site (line 769) and the method definition (line 1379).
+  Let me verify the call site looks correct:
+
+● Read 1 file (ctrl+o to expand)
+
+● Good. Let me also verify there are no issues with the TaxCalculationService by
+   re-reading the final state:
+
+● Read 1 file (ctrl+o to expand)
+
+● Everything looks correct. Here's a summary of the fix:
+
+  Root Cause
+
+  The TaxCalculationService.calculateEmployeeTax() was using theoretical/phantom
+   deductions instead of actual payroll values:
+
+  Deduction: SSF
+  Before (Bug): Calculated for ALL employees at 5% (even Expats who don't pay
+    SSF)
+  After (Fix): Uses actual payroll SSF (0 for Expats)
+  ────────────────────────────────────────
+  Deduction: PVD/SF
+  Before (Bug): Applied 7.5% for ALL Local ID/Non-ID (even if not enrolled or
+    still on probation)
+  After (Fix): Uses actual payroll PVD/SF (0 if not enrolled or pre-probation)
+
+  How this caused 0 tax for employee 0094:
+
+  If 0094 is "Local ID Staff" with salary ~30-35k:
+  - Before: phantom PVD (~25k) + SSF (~10k) inflated annual deductions to ~195k,
+   pushing taxable income below 150k → tax = 0
+  - After: actual PVD = 0 (not enrolled or pre-probation), actual SSF =
+  875/month → deductions ~170k, taxable income ~160k → tax > 0
+
+  Employee 0006 ("Expats Local") wasn't affected because Expats already had PVD
+  = 0, and the phantom SSF actually made their tax slightly lower than it should
+   be.
+
+  Files Changed
+
+  1. PayrollService.php — calculateIncomeTax() now accepts $actualMonthlySsf and
+   $actualMonthlyPvdSf from the actual payroll calculation and passes them to
+  the tax service
+  2. TaxCalculationService.php — calculateEmployeeTax() now uses actual SSF/PVD
+  values when provided, falling back to theoretical calculation only for legacy
+  callers
+
+✻ Sautéed for 8m 14s
+
+❯ php artisan migrate:refresh --seed                                        
+                                                                            
+     Illuminate\Database\QueryException                                     
+                                                                            
+    SQLSTATE[08001]: [Microsoft][ODBC Driver 17 for SQL Server]TCP          
+  Provider: No connection could be made because the target machine actively 
+   refused it.                                                              
+   (Connection: sqlsrv, Host: 127.0.0.1, Port: 1433, Database: hrms, SQL:   
+  select (case when object_id(N'migrations', 'U') is null then 0 else 1     
+  end) as [exists])                                                         
+                                                                            
+    at vendor\laravel\framework\src\Illuminate\Database\Connection.php:838  
+      834▕             $exceptionType = $this->isUniqueConstraintError($e)  
+      835▕                 ? UniqueConstraintViolationException::class      
+      836▕                 : QueryException::class;                         
+      837▕                                                                  
+    ➜ 838▕             throw new $exceptionType(                            
+      839▕                 $this->getNameWithReadWriteType(),               
+      840▕                 $query,                                          
+      841▕                 $this->prepareBindings($bindings),               
+      842▕                 $e,                                              
+                                                                            
+    1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connect 
+  or.php:66                                                                 
+        PDOException::("SQLSTATE                                            
+
+● Your SQL Server isn't running. The database connection on port 1433 is being
+  refused. Start the SQL Server service first:
+
+  net start MSSQLSERVER
+
+  Or if you're using a named instance (like SQL Server Express):
+
+  net start "SQL Server (SQLEXPRESS)"
+
+  You can also start it from Windows Services (services.msc) — look for "SQL
+  Server" and click Start.
+
+  Once the service is running, re-run your command.

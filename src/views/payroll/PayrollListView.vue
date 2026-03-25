@@ -24,6 +24,34 @@
         >
           <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
         </a-select>
+        <a-select
+          v-model:value="filters.site"
+          placeholder="Site"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          class="filter-input"
+          style="width: 130px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="s in siteOptions" :key="s.id" :value="s.name" :label="s.name">
+            {{ s.name }}
+          </a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.department"
+          placeholder="Department"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          class="filter-input"
+          style="width: 170px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="d in departmentOptions" :key="d.id" :value="d.name" :label="d.name">
+            {{ d.name }}
+          </a-select-option>
+        </a-select>
         <a-date-picker
           v-model:value="filters.payPeriod"
           picker="month"
@@ -199,7 +227,7 @@
           v-model:pageSize="budgetPagination.per_page"
           :total="budgetPagination.total"
           :show-size-changer="true"
-          :show-total="(total) => `${total} allocations`"
+          :show-total="(total) => `${total} employees`"
           :page-size-options="['50', '100']"
           size="small"
           @change="fetchBudgetHistory"
@@ -241,7 +269,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
-import { payrollApi } from '@/api'
+import { payrollApi, optionsApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
 import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
 import { formatCurrency, formatDate, fmtFte } from '@/utils/formatters'
@@ -309,7 +337,9 @@ const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
 const search = ref('')
-const filters = reactive({ organization: undefined, payPeriod: null, fundType: undefined })
+const filters = reactive({ organization: undefined, department: undefined, site: undefined, payPeriod: null, fundType: undefined })
+const siteOptions = ref([])
+const departmentOptions = ref([])
 const fundSummary = reactive({ pvd_count: null, saving_fund_count: null })
 const page = ref(1)
 const perPage = ref(20)
@@ -339,6 +369,8 @@ async function fetchItems() {
       per_page: 10000,
       ...(search.value && { search: search.value }),
       ...(filters.organization && { filter_organization: filters.organization }),
+      ...(filters.department && { filter_department: filters.department }),
+      ...(filters.site && { filter_site: filters.site }),
       ...(filters.fundType && { filter_fund_type: filters.fundType }),
     }
     if (filters.payPeriod) {
@@ -399,7 +431,7 @@ const budgetData = ref([])
 const budgetMonths = ref([])
 const budgetLoading = ref(false)
 const budgetDateRange = ref([dayjs().subtract(11, 'month').startOf('month'), dayjs().startOf('month')])
-const budgetField = ref('net_salary')
+const budgetField = ref('gross_salary_by_fte')
 const budgetPagination = reactive({ current_page: 1, per_page: 50, total: 0 })
 
 async function fetchBudgetHistory() {
@@ -413,12 +445,13 @@ async function fetchBudgetHistory() {
       end_date: dayjs(budgetDateRange.value[1]).format('YYYY-MM'),
       ...(search.value && { search: search.value }),
       ...(filters.organization && { organization: filters.organization }),
+      ...(filters.department && { department: filters.department }),
+      ...(filters.site && { site: filters.site }),
     }
     const { data } = await payrollApi.budgetHistory(params)
-    const result = data.data
-    budgetData.value = result.data || []
-    budgetMonths.value = result.date_range?.months || []
-    if (result.pagination) Object.assign(budgetPagination, result.pagination)
+    budgetData.value = data.data || []
+    budgetMonths.value = data.date_range?.months || []
+    if (data.pagination) Object.assign(budgetPagination, data.pagination)
   } catch (err) {
     message.error(err.response?.data?.message || 'Failed to load budget history')
   }
@@ -426,7 +459,7 @@ async function fetchBudgetHistory() {
 }
 
 watch(viewMode, (mode) => {
-  if (mode === 'budget' && !budgetData.value.length) {
+  if (mode === 'budget') {
     fetchBudgetHistory()
   }
 })
@@ -514,8 +547,17 @@ function onCreated() {
   if (viewMode.value === 'budget') fetchBudgetHistory()
 }
 
+async function fetchFilterOptions() {
+  try {
+    const [sitesRes, deptsRes] = await Promise.all([optionsApi.sites(), optionsApi.departments()])
+    siteOptions.value = sitesRes.data?.data || []
+    departmentOptions.value = deptsRes.data?.data || []
+  } catch { /* silent — filters still work with manual input */ }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Payroll')
+  fetchFilterOptions()
   fetchItems()
 })
 </script>

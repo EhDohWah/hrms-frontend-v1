@@ -35,6 +35,13 @@
             <SwapOutlined /> Transfer
           </a-button>
           <a-button
+            v-if="isEditMode && authStore.canCreate('resignation')"
+            danger
+            @click="resignationModalOpen = true"
+          >
+            <LogoutOutlined /> Resign
+          </a-button>
+          <a-button
             v-if="canSave && !isLiveTab"
             type="primary"
             :loading="saving"
@@ -132,6 +139,13 @@
         :employee="employee"
         @transferred="loadEmployee"
       />
+
+      <!-- Resignation Modal -->
+      <ResignationModal
+        v-model:open="resignationModalOpen"
+        :employee="employee"
+        @submitted="loadEmployee"
+      />
     </template>
   </div>
 </template>
@@ -145,11 +159,12 @@ import { createVNode } from 'vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeApi } from '@/api'
-import { ArrowLeftOutlined, DatabaseOutlined, SwapOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, DatabaseOutlined, SwapOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 
 import ActivityTimeline from '@/components/ActivityTimeline.vue'
 import EmployeeSidebar from './components/EmployeeSidebar.vue'
 import TransferModal from './components/TransferModal.vue'
+import ResignationModal from './components/ResignationModal.vue'
 import BasicInfoTab from './tabs/BasicInfoTab.vue'
 import IdentificationTab from './tabs/IdentificationTab.vue'
 import ContactFamilyTab from './tabs/ContactFamilyTab.vue'
@@ -171,6 +186,7 @@ const saving = ref(false)
 const activeTab = ref('basic_info')
 
 const transferModalOpen = ref(false)
+const resignationModalOpen = ref(false)
 const isEditMode = computed(() => !!route.params.id)
 const guidedCreate = computed(() => !!window.history.state?.autoOpenEmployment)
 const canSave = computed(() => isEditMode.value ? authStore.canUpdate('employees') : authStore.canCreate('employees'))

@@ -3,12 +3,22 @@
     <template v-if="!readonly">
       <div class="form-section-title">Staff Details</div>
       <a-row :gutter="16">
-        <a-col :span="12">
+        <a-col :span="6">
+          <a-form-item label="Organization" required>
+            <a-select
+              v-model:value="form.organization"
+              placeholder="Select"
+            >
+              <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="9">
           <a-form-item label="Staff ID" required>
             <a-input v-model:value="form.staff_id" placeholder="e.g. 0101" />
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col :span="9">
           <a-form-item label="Status" required>
             <a-select
               v-model:value="form.status"
@@ -146,6 +156,7 @@
     <template v-else>
       <div class="section-title">Staff Details</div>
       <div class="info-grid">
+        <InfoField label="Organization" :value="form.organization" />
         <InfoField label="Staff ID" :value="form.staff_id" mono />
         <InfoField label="Status" :value="form.status" />
       </div>
@@ -178,11 +189,11 @@
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import InfoField from '@/components/common/InfoField.vue'
 import { lookupApi } from '@/api'
-
-const dayjs = inject('$dayjs')
+import { ORG_OPTIONS } from '@/constants/organizations'
+import { formatDate, genderLabel } from '@/utils/formatters'
 
 defineProps({
   form: { type: Object, required: true },
@@ -224,40 +235,72 @@ async function fetchLookups() {
 
 onMounted(fetchLookups)
 
-function genderLabel(val) {
-  return genderLabelMap[val] || val || null
-}
-
-function formatDate(date) {
-  return date ? dayjs(date).format('DD MMM YYYY') : null
-}
 </script>
 
 <style scoped>
 .form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   margin-bottom: 12px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1.5px solid var(--color-border);
+}
+.form-section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
 }
 .form-section-title:first-child { margin-top: 0; }
 .form-section-title:not(:first-child) { margin-top: 8px; }
 
 .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   margin: 20px 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--color-border);
+}
+.section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
 }
 .section-title:first-child { margin-top: 0; }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.info-grid > :deep(:nth-child(n+4)) {
+  border-top: 1px solid var(--color-border-light);
+}
+.info-grid :deep(.info-value) {
+  border-right: 0.5px solid var(--color-border-light);
+}
+.info-grid > :deep(:nth-child(3n) .info-value) {
+  border-right: none;
 }
 </style>

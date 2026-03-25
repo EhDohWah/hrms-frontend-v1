@@ -51,11 +51,6 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       less: {
-        modifyVars: {
-          'primary-color': '#002147',
-          'border-radius-base': '8px',
-          'font-family': "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-        },
         javascriptEnabled: true,
       },
     },

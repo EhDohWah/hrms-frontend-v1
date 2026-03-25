@@ -32,3 +32,13 @@ export const positionApi = {
   options: () => client.get('/positions/options'),
   directReports: (id) => client.get(`/positions/${id}/direct-reports`),
 }
+
+export const sectionDepartmentApi = {
+  list: (params, config) => client.get('/section-departments', { params, ...config }),
+  show: (id) => client.get(`/section-departments/${id}`),
+  store: (payload) => client.post('/section-departments', payload),
+  update: (id, payload) => client.put(`/section-departments/${id}`, payload),
+  destroy: (id) => client.delete(`/section-departments/${id}`),
+  options: (params) => client.get('/section-departments/options', { params }),
+  byDepartment: (departmentId) => client.get(`/section-departments/by-department/${departmentId}`),
+}

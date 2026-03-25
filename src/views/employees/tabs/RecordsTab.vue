@@ -2,7 +2,7 @@
   <div>
     <!-- ============ Education ============ -->
     <div class="section-header">
-      <div class="section-title" style="margin: 0; border: none; padding: 0;">Education</div>
+      <div class="section-title">Education</div>
       <a-button v-if="canCreate" size="small" @click="openEducationModal()">
         <PlusOutlined /> Add
       </a-button>
@@ -35,7 +35,7 @@
 
     <!-- ============ Children ============ -->
     <div class="section-header">
-      <div class="section-title" style="margin: 0; border: none; padding: 0;">Children</div>
+      <div class="section-title">Children</div>
       <a-button v-if="canCreate" size="small" @click="openChildModal()">
         <PlusOutlined /> Add
       </a-button>
@@ -68,7 +68,7 @@
 
     <!-- ============ Languages ============ -->
     <div class="section-header">
-      <div class="section-title" style="margin: 0; border: none; padding: 0;">Languages</div>
+      <div class="section-title">Languages</div>
       <a-button v-if="canCreate" size="small" @click="openLanguageModal()">
         <PlusOutlined /> Add
       </a-button>
@@ -91,7 +91,7 @@
 
     <!-- ============ Beneficiaries ============ -->
     <div class="section-header">
-      <div class="section-title" style="margin: 0; border: none; padding: 0;">Beneficiaries</div>
+      <div class="section-title">Beneficiaries</div>
       <a-button v-if="canCreate" size="small" @click="openBeneficiaryModal()">
         <PlusOutlined /> Add
       </a-button>
@@ -269,7 +269,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, inject, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -280,8 +280,8 @@ import {
   lookupApi,
 } from '@/api'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { formatDate, genderLabel } from '@/utils/formatters'
 
-const dayjs = inject('$dayjs')
 const authStore = useAuthStore()
 
 // ======================== Lookup Options ========================
@@ -321,16 +321,6 @@ const canUpdate = computed(() => authStore.canUpdate('employees'))
 const canDelete = computed(() => authStore.canDelete('employees'))
 
 // ======================== Helpers ========================
-function formatDate(date) {
-  return date ? dayjs(date).format('DD MMM YYYY') : '—'
-}
-
-function genderLabel(val) {
-  if (val === 'M') return 'Male'
-  if (val === 'F') return 'Female'
-  return val || '—'
-}
-
 function showApiError(err, fallback) {
   const resp = err.response?.data
   if (resp?.errors) {
@@ -605,14 +595,32 @@ function confirmDelete(type, record) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--color-border);
 }
 .section-header:not(:first-child) {
   margin-top: 24px;
 }
+.section-header .section-title {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
 .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
+}
+.section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
 }
 .modal-form { margin-top: 8px; }
 </style>

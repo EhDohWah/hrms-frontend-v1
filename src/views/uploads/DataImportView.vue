@@ -1,89 +1,119 @@
 <template>
   <div class="page-container">
     <div class="import-grid">
-      <template v-for="mod in visibleModules" :key="mod.key">
-        <a-card class="import-card">
-          <template #title>
-            <div class="card-title">
-              <component :is="mod.icon" class="card-icon" />
-              <span>{{ mod.label }}</span>
-            </div>
-          </template>
-
-          <p class="card-description">{{ mod.description }}</p>
-
-          <!-- Download buttons -->
-          <div class="download-section">
-            <a-button @click="handleDownload(mod.template, mod.templateLabel)" :loading="downloading[mod.template]">
-              <DownloadOutlined /> {{ mod.templateLabel || 'Download Template' }}
-            </a-button>
-            <a-button
-              v-if="mod.referenceTemplate"
-              @click="handleDownload(mod.referenceTemplate, mod.referenceLabel)"
-              :loading="downloading[mod.referenceTemplate]"
-            >
-              <DownloadOutlined /> {{ mod.referenceLabel }}
-            </a-button>
+      <!-- Grant Import -->
+      <a-card v-if="authStore.canRead('grants_list')" class="import-card grant-card">
+        <template #title>
+          <div class="card-title">
+            <TrophyOutlined class="card-icon" />
+            <span>Grant Import</span>
           </div>
+        </template>
 
-          <!-- Upload area — only if user has edit permission -->
-          <template v-if="authStore.canCreate(mod.editPermission)">
-            <a-upload-dragger
-              v-model:file-list="mod.fileList"
-              :before-upload="() => false"
-              :accept="ACCEPTED_TYPES"
-              :max-count="1"
-              class="upload-dragger"
-            >
-              <p class="ant-upload-drag-icon"><InboxOutlined /></p>
-              <p class="ant-upload-text">Click or drag file to this area</p>
-              <p class="ant-upload-hint">.xlsx, .xls, or .csv (max 10 MB)</p>
-            </a-upload-dragger>
+        <p class="card-description">
+          Import grants and grant positions. Upload one Excel file with one sheet per grant.
+          This must be done <strong>before</strong> Data Onboarding.
+        </p>
 
-            <a-button
-              type="primary"
-              :loading="uploading[mod.key]"
-              class="upload-btn"
-              @click="handleUpload(mod)"
-            >
-              <UploadOutlined /> Upload
-            </a-button>
-          </template>
+        <div class="download-section">
+          <a-button @click="handleDownload('grant-template', 'Grant Template')" :loading="downloading['grant-template']">
+            <DownloadOutlined /> Download Template
+          </a-button>
+        </div>
 
-          <!-- Result summary -->
-          <a-alert
-            v-if="results[mod.key]"
-            :type="results[mod.key].type"
-            :message="results[mod.key].message"
-            :description="results[mod.key].description"
-            show-icon
-            closable
-            class="result-alert"
-            @close="results[mod.key] = null"
-          />
-        </a-card>
-      </template>
+        <template v-if="authStore.canCreate('grants_list')">
+          <a-upload-dragger
+            v-model:file-list="grantFileList"
+            :before-upload="() => false"
+            :accept="ACCEPTED_TYPES"
+            :max-count="1"
+            class="upload-dragger"
+          >
+            <p class="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p class="ant-upload-text">Click or drag file to upload</p>
+            <p class="ant-upload-hint">.xlsx, .xls, or .csv (max 10 MB)</p>
+          </a-upload-dragger>
+
+          <a-button
+            type="primary"
+            :loading="uploading['grant']"
+            class="upload-btn"
+            @click="handleGrantUpload"
+          >
+            <UploadOutlined /> Upload
+          </a-button>
+        </template>
+
+        <ImportResultAlert :result="results['grant']" @close="results['grant'] = null" />
+      </a-card>
+
+      <!-- Data Onboarding -->
+      <a-card v-if="authStore.canRead('employees')" class="import-card onboarding-card">
+        <template #title>
+          <div class="card-title">
+            <CloudUploadOutlined class="card-icon" />
+            <span>Data Onboarding</span>
+            <a-tag color="blue" style="margin-left: auto; font-weight: 400; font-size: 11px">All-in-One</a-tag>
+          </div>
+        </template>
+
+        <p class="card-description">
+          Import employees, employment records, funding allocations, and payroll in a single
+          spreadsheet. Each section is optional — fill only what you need.
+        </p>
+
+        <div class="download-section">
+          <a-button
+            @click="handleDownload('data-onboarding-template', 'Data Onboarding Template')"
+            :loading="downloading['data-onboarding-template']"
+          >
+            <DownloadOutlined /> Download Template
+          </a-button>
+        </div>
+
+        <template v-if="authStore.canCreate('employees')">
+          <a-upload-dragger
+            v-model:file-list="onboardingFileList"
+            :before-upload="() => false"
+            :accept="'.xlsx,.xls'"
+            :max-count="1"
+            class="upload-dragger"
+          >
+            <p class="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p class="ant-upload-text">Click or drag file to upload</p>
+            <p class="ant-upload-hint">.xlsx or .xls (max 10 MB)</p>
+          </a-upload-dragger>
+
+          <a-button
+            type="primary"
+            :loading="uploading['data-onboarding']"
+            class="upload-btn"
+            @click="handleOnboardingUpload"
+          >
+            <UploadOutlined /> Upload
+          </a-button>
+        </template>
+
+        <ImportResultAlert :result="results['data-onboarding']" @close="results['data-onboarding'] = null" />
+      </a-card>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import {
+  CloudUploadOutlined,
   DownloadOutlined,
   UploadOutlined,
   InboxOutlined,
   TrophyOutlined,
-  TeamOutlined,
-  FileTextOutlined,
-  FundProjectionScreenOutlined,
-  DollarOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadApi } from '@/api'
 import { useNotification } from '@/composables/useNotification'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 const ACCEPTED_TYPES = '.xlsx,.xls,.csv'
 const ACCEPTED_MIMES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -94,86 +124,13 @@ const ACCEPTED_MIMES = [
 const authStore = useAuthStore()
 const notify = useNotification()
 
-const modules = reactive([
-  {
-    key: 'grant',
-    label: 'Grants',
-    icon: TrophyOutlined,
-    description: 'Import grants data from a spreadsheet.',
-    readPermission: 'grants_list',
-    editPermission: 'grants_list',
-    template: 'grant-template',
-    referenceTemplate: null,
-    referenceLabel: null,
-    templateLabel: 'Download Template',
-    async: false,
-    fileList: [],
-  },
-  {
-    key: 'employee',
-    label: 'Employees',
-    icon: TeamOutlined,
-    description: 'Import employee records from a spreadsheet.',
-    readPermission: 'employees',
-    editPermission: 'employees',
-    template: 'employee-template',
-    referenceTemplate: null,
-    referenceLabel: null,
-    templateLabel: 'Download Template',
-    async: false,
-    fileList: [],
-  },
-  {
-    key: 'employment',
-    label: 'Employment Records',
-    icon: FileTextOutlined,
-    description: 'Import employment records from a spreadsheet.',
-    readPermission: 'employment_records',
-    editPermission: 'employment_records',
-    template: 'employment-template',
-    referenceTemplate: null,
-    referenceLabel: null,
-    templateLabel: 'Download Template',
-    async: true,
-    fileList: [],
-  },
-  {
-    key: 'employee-funding-allocation',
-    label: 'Funding Allocations',
-    icon: FundProjectionScreenOutlined,
-    description: 'Import employee funding allocations from a spreadsheet.',
-    readPermission: 'employee_funding_allocations',
-    editPermission: 'employee_funding_allocations',
-    template: 'employee-funding-allocation-template',
-    referenceTemplate: 'grant-items-reference',
-    referenceLabel: 'Grant Items Reference',
-    templateLabel: 'Download Template',
-    async: true,
-    fileList: [],
-  },
-  {
-    key: 'payroll',
-    label: 'Payroll',
-    icon: DollarOutlined,
-    description: 'Import payroll data from a spreadsheet.',
-    readPermission: 'employee_salary',
-    editPermission: 'employee_salary',
-    template: 'payroll-template',
-    referenceTemplate: 'employee-funding-allocations-reference',
-    referenceLabel: 'Allocations Reference',
-    templateLabel: 'Download Template',
-    async: true,
-    fileList: [],
-  },
-])
-
-const visibleModules = computed(() =>
-  modules.filter((mod) => authStore.canRead(mod.readPermission)),
-)
-
+const grantFileList = ref([])
+const onboardingFileList = ref([])
 const downloading = reactive({})
 const uploading = reactive({})
 const results = reactive({})
+
+// ─── Shared Helpers ──────────────────────────────────────────────
 
 async function handleDownload(template, label) {
   downloading[template] = true
@@ -213,66 +170,171 @@ function validateFile(file) {
   return true
 }
 
-async function handleUpload(mod) {
-  if (!mod.fileList.length) {
+function extractFile(fileList) {
+  const list = Array.isArray(fileList) ? fileList : fileList?.value ?? []
+  if (!list.length) {
     notify.warning('Please select a file first')
-    return
+    return null
   }
-  const fileEntry = mod.fileList[0]
-  const file = fileEntry?.originFileObj || fileEntry
+  const file = list[0]?.originFileObj || list[0]
+  return validateFile(file) ? file : null
+}
 
-  if (!validateFile(file)) return
+// ─── Grant Upload ────────────────────────────────────────────────
 
-  uploading[mod.key] = true
-  results[mod.key] = null
+async function handleGrantUpload() {
+  const KEY = 'grant'
+  const file = extractFile(grantFileList)
+  if (!file) return
+
+  uploading[KEY] = true
+  results[KEY] = null
 
   try {
-    const response = await uploadApi.upload(mod.key, file)
-    const status = response.status
+    const response = await uploadApi.upload(KEY, file)
+    const data = response.data
+    const importData = data?.data ?? {}
+    const errorCount = importData.errors?.length ?? 0
+    const skippedCount = importData.skipped_grants?.length ?? 0
 
-    if (status === 202 || mod.async) {
-      results[mod.key] = {
-        type: 'info',
-        message: 'Import started',
-        description: response.data?.message || 'Processing in the background. You will be notified when the import is complete.',
-      }
-    } else {
-      const data = response.data
-      const successCount = data?.success_count ?? data?.imported ?? null
-      const errorCount = data?.error_count ?? data?.errors?.length ?? 0
-      let description = data?.message || 'Import completed successfully.'
-      if (successCount !== null) {
-        description = `${successCount} record(s) imported successfully.`
-        if (errorCount > 0) {
-          description += ` ${errorCount} error(s) encountered.`
-        }
-      }
-      results[mod.key] = {
-        type: errorCount > 0 ? 'warning' : 'success',
-        message: 'Import Complete',
-        description,
-      }
+    const grants = importData.processed_grants ?? 0
+    const items = importData.processed_items ?? 0
+    const parts = []
+    if (grants > 0) parts.push(`${grants} grant(s) and ${items} position(s) imported`)
+    if (errorCount > 0) parts.push(`${errorCount} grant(s) failed`)
+    if (skippedCount > 0) parts.push(`${skippedCount} grant(s) skipped`)
+    const description = parts.length > 0 ? parts.join(', ') + '.' : (data?.message || 'Import completed.')
+
+    const errorMessages = Array.isArray(importData.errors) ? importData.errors.slice(0, 10) : []
+    if (errorCount > 10) errorMessages.push(`... and ${errorCount - 10} more error(s)`)
+
+    const hasIssues = errorCount > 0 || skippedCount > 0
+    results[KEY] = {
+      type: hasIssues ? 'warning' : 'success',
+      message: hasIssues ? 'Import Completed with Issues' : 'Import Complete',
+      description,
+      errors: errorMessages,
     }
 
-    mod.fileList = []
-    notify.success(`${mod.label} import submitted`)
+    grantFileList.value = []
+    notify.success('Grant imported successfully')
   } catch (err) {
     const errData = err.response?.data
-    let description = errData?.message || 'An error occurred during import.'
+    let errorList = []
     if (errData?.errors) {
-      const errorMessages = typeof errData.errors === 'object'
-        ? Object.values(errData.errors).flat().slice(0, 5).join('; ')
-        : String(errData.errors)
-      if (errorMessages) description = errorMessages
+      errorList = Array.isArray(errData.errors)
+        ? errData.errors.slice(0, 10)
+        : Object.values(errData.errors).flat().slice(0, 10)
     }
-    results[mod.key] = {
+    results[KEY] = {
       type: 'error',
       message: 'Import Failed',
-      description,
+      description: errData?.message || 'An error occurred during import.',
+      errors: errorList,
     }
   } finally {
-    uploading[mod.key] = false
+    uploading[KEY] = false
   }
+}
+
+// ─── Data Onboarding Upload ──────────────────────────────────────
+
+async function handleOnboardingUpload() {
+  const KEY = 'data-onboarding'
+  const file = extractFile(onboardingFileList)
+  if (!file) return
+
+  uploading[KEY] = true
+  results[KEY] = null
+
+  try {
+    const response = await uploadApi.upload(KEY, file)
+    const data = response.data
+    const importData = data?.data ?? {}
+    const summary = importData.summary ?? {}
+    const warnings = importData.warnings ?? []
+
+    const parts = []
+    if (summary.employees_created > 0) parts.push(`${summary.employees_created} employee(s) created`)
+    if (summary.employees_existing > 0) parts.push(`${summary.employees_existing} existing employee(s) skipped`)
+    if (summary.employments_created > 0) parts.push(`${summary.employments_created} employment(s) created`)
+    if (summary.allocations_created > 0) parts.push(`${summary.allocations_created} allocation(s) created`)
+    if (summary.payrolls_created > 0) parts.push(`${summary.payrolls_created} payroll(s) created`)
+    const description = parts.length > 0 ? parts.join(', ') + '.' : (data?.message || 'Import completed.')
+
+    const warningMessages = warnings.slice(0, 10).map((w) =>
+      typeof w === 'string' ? w : `Row ${w.row}: ${w.field} — ${w.message}`,
+    )
+    if (warnings.length > 10) warningMessages.push(`... and ${warnings.length - 10} more warning(s)`)
+
+    results[KEY] = {
+      type: warningMessages.length > 0 ? 'warning' : 'success',
+      message: warningMessages.length > 0 ? 'Import Complete with Warnings' : 'Import Complete',
+      description,
+      warnings: warningMessages,
+    }
+
+    onboardingFileList.value = []
+    notify.success('Data onboarding import completed')
+  } catch (err) {
+    const errData = err.response?.data
+    const errPayload = errData?.errors ?? {}
+    const rawErrors = errPayload?.errors ?? errPayload
+    let errorList = []
+    if (Array.isArray(rawErrors)) {
+      errorList = rawErrors.slice(0, 10).map((e) =>
+        typeof e === 'string' ? e : `Row ${e.row}, ${e.field}: ${e.message}`,
+      )
+      if (rawErrors.length > 10) errorList.push(`... and ${rawErrors.length - 10} more error(s)`)
+    } else if (typeof rawErrors === 'object' && rawErrors !== null) {
+      errorList = Object.values(rawErrors).flat().slice(0, 10)
+    }
+
+    const rawWarnings = errPayload?.warnings ?? []
+    const warningMessages = Array.isArray(rawWarnings)
+      ? rawWarnings.slice(0, 5).map((w) => (typeof w === 'string' ? w : `Row ${w.row}: ${w.field} — ${w.message}`))
+      : []
+
+    results[KEY] = {
+      type: 'error',
+      message: 'Import Failed',
+      description: errData?.message || 'An error occurred during import.',
+      errors: errorList,
+      warnings: warningMessages,
+    }
+  } finally {
+    uploading[KEY] = false
+  }
+}
+
+// ─── Result Alert Component ──────────────────────────────────────
+
+const ImportResultAlert = {
+  props: {
+    result: { type: Object, default: null },
+  },
+  emits: ['close'],
+  template: `
+    <a-alert
+      v-if="result"
+      :type="result.type"
+      :message="result.message"
+      show-icon
+      closable
+      class="result-alert"
+      @close="$emit('close')"
+    >
+      <template #description>
+        <div>{{ result.description }}</div>
+        <ul v-if="result.errors?.length" class="import-error-list">
+          <li v-for="(err, i) in result.errors" :key="i">{{ err }}</li>
+        </ul>
+        <ul v-if="result.warnings?.length" class="import-warning-list">
+          <li v-for="(w, i) in result.warnings" :key="'w' + i">{{ w }}</li>
+        </ul>
+      </template>
+    </a-alert>
+  `,
 }
 </script>
 
@@ -280,7 +342,7 @@ async function handleUpload(mod) {
 .import-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 20px;
 }
 @media (min-width: 768px) {
   .import-grid {
@@ -291,6 +353,13 @@ async function handleUpload(mod) {
 .import-card :deep(.ant-card-head) {
   min-height: auto;
   padding: 12px 16px;
+}
+
+.grant-card {
+  border-top: 3px solid #faad14;
+}
+.onboarding-card {
+  border-top: 3px solid #1677ff;
 }
 
 .card-title {
@@ -309,6 +378,7 @@ async function handleUpload(mod) {
   color: var(--color-text-secondary, #6b7280);
   margin-bottom: 16px;
   font-size: 13px;
+  line-height: 1.5;
 }
 
 .download-section {
@@ -330,4 +400,19 @@ async function handleUpload(mod) {
   margin-top: 12px;
 }
 
+.import-error-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.import-warning-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d48806;
+}
 </style>

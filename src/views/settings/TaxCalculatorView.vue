@@ -156,23 +156,23 @@
               <div class="summary-cards income-cards">
                 <div class="summary-card">
                   <div class="summary-label">Monthly Gross</div>
-                  <div class="summary-value font-mono">{{ fmtCurrency(incomeResult.monthly_gross_income) }}</div>
+                  <div class="summary-value font-mono">{{ formatCurrency(incomeResult.monthly_gross_income) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Taxable Income</div>
-                  <div class="summary-value font-mono">{{ fmtCurrency(incomeResult.taxable_income) }}</div>
+                  <div class="summary-value font-mono">{{ formatCurrency(incomeResult.taxable_income) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Annual Tax</div>
-                  <div class="summary-value font-mono accent">{{ fmtCurrency(incomeResult.annual_tax) }}</div>
+                  <div class="summary-value font-mono accent">{{ formatCurrency(incomeResult.annual_tax) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Monthly Tax</div>
-                  <div class="summary-value font-mono accent">{{ fmtCurrency(incomeResult.monthly_tax) }}</div>
+                  <div class="summary-value font-mono accent">{{ formatCurrency(incomeResult.monthly_tax) }}</div>
                 </div>
                 <div class="summary-card highlight">
                   <div class="summary-label">Est. Net Monthly</div>
-                  <div class="summary-value font-mono font-semibold">{{ fmtCurrency(incomeResult.net_monthly_salary) }}</div>
+                  <div class="summary-value font-mono font-semibold">{{ formatCurrency(incomeResult.net_monthly_salary) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Effective Rate</div>
@@ -186,7 +186,7 @@
                 <div class="waterfall">
                   <div class="waterfall-row gross">
                     <span class="waterfall-label">Annual Gross Income</span>
-                    <span class="font-mono font-semibold">{{ fmtCurrency(incomeResult.annual_gross_income) }}</span>
+                    <span class="font-mono font-semibold">{{ formatCurrency(incomeResult.annual_gross_income) }}</span>
                   </div>
 
                   <div class="waterfall-divider" />
@@ -196,7 +196,7 @@
                       Employment Deduction
                       <span class="waterfall-note">{{ incomeResult.employment_deductions_rate }}% of gross, max ฿{{ Number(incomeResult.employment_deductions_max).toLocaleString() }}</span>
                     </span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(incomeResult.employment_deductions) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(incomeResult.employment_deductions) }}</span>
                   </div>
 
                   <div class="waterfall-row deduction">
@@ -204,12 +204,12 @@
                       Personal Allowances
                       <span class="waterfall-note">{{ allowancesAppliedSummary }}</span>
                     </span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(incomeResult.personal_allowances_total) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(incomeResult.personal_allowances_total) }}</span>
                   </div>
 
                   <div v-if="incomeResult.social_security_annual > 0" class="waterfall-row deduction">
                     <span class="waterfall-label indent">Social Security Fund (Annual)</span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(incomeResult.social_security_annual) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(incomeResult.social_security_annual) }}</span>
                   </div>
 
                   <div v-if="incomeResult.provident_fund_annual > 0" class="waterfall-row deduction">
@@ -217,19 +217,19 @@
                       {{ incomeResult.provident_fund_type }}
                       <span class="waterfall-note">{{ incomeResult.provident_fund_rate }}%</span>
                     </span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(incomeResult.provident_fund_annual) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(incomeResult.provident_fund_annual) }}</span>
                   </div>
 
                   <div class="waterfall-divider" />
 
                   <div class="waterfall-row total-deductions">
                     <span class="waterfall-label">Total Deductions</span>
-                    <span class="font-mono font-semibold deduction-amount">−{{ fmtCurrency(incomeResult.total_deductions) }}</span>
+                    <span class="font-mono font-semibold deduction-amount">−{{ formatCurrency(incomeResult.total_deductions) }}</span>
                   </div>
 
                   <div class="waterfall-row taxable">
                     <span class="waterfall-label">Taxable Income</span>
-                    <span class="font-mono font-semibold">{{ fmtCurrency(incomeResult.taxable_income) }}</span>
+                    <span class="font-mono font-semibold">{{ formatCurrency(incomeResult.taxable_income) }}</span>
                   </div>
                 </div>
               </a-card>
@@ -264,7 +264,7 @@
                   <div class="allowance-row total-row">
                     <span class="allowance-name font-semibold">Total Personal Allowances</span>
                     <span class="font-mono font-semibold deduction-amount">
-                      −{{ fmtCurrency(incomeResult.personal_allowances_total) }}
+                      −{{ formatCurrency(incomeResult.personal_allowances_total) }}
                     </span>
                   </div>
                 </div>
@@ -300,7 +300,7 @@
                           <strong>Total Annual Tax</strong>
                         </a-table-summary-cell>
                         <a-table-summary-cell align="right">
-                          <strong class="font-mono">{{ incomeResult.tax_breakdown?.summary?.formatted_annual_tax || fmtCurrency(incomeResult.annual_tax) }}</strong>
+                          <strong class="font-mono">{{ incomeResult.tax_breakdown?.summary?.formatted_annual_tax || formatCurrency(incomeResult.annual_tax) }}</strong>
                         </a-table-summary-cell>
                       </a-table-summary-row>
                     </a-table-summary>
@@ -367,19 +367,19 @@
               <div class="summary-cards payroll-cards">
                 <div class="summary-card">
                   <div class="summary-label">Monthly Gross</div>
-                  <div class="summary-value font-mono">{{ fmtCurrency(payrollResult.gross_salary) }}</div>
+                  <div class="summary-value font-mono">{{ formatCurrency(payrollResult.gross_salary) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Monthly Tax</div>
-                  <div class="summary-value font-mono accent">{{ fmtCurrency(payrollResult.monthly_tax_amount) }}</div>
+                  <div class="summary-value font-mono accent">{{ formatCurrency(payrollResult.monthly_tax_amount) }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Monthly SSF</div>
-                  <div class="summary-value font-mono">{{ fmtCurrency(payrollResult.social_security_monthly) }}</div>
+                  <div class="summary-value font-mono">{{ formatCurrency(payrollResult.social_security_monthly) }}</div>
                 </div>
                 <div class="summary-card highlight">
                   <div class="summary-label">Net Salary</div>
-                  <div class="summary-value font-mono font-semibold">{{ fmtCurrency(payrollResult.net_salary) }}</div>
+                  <div class="summary-value font-mono font-semibold">{{ formatCurrency(payrollResult.net_salary) }}</div>
                 </div>
               </div>
 
@@ -388,33 +388,33 @@
                 <div class="waterfall">
                   <div class="waterfall-row gross">
                     <span class="waterfall-label">Annual Gross Salary</span>
-                    <span class="font-mono font-semibold">{{ fmtCurrency(payrollResult.annual_gross_salary) }}</span>
+                    <span class="font-mono font-semibold">{{ formatCurrency(payrollResult.annual_gross_salary) }}</span>
                   </div>
                   <div class="waterfall-divider" />
                   <div class="waterfall-row deduction">
                     <span class="waterfall-label indent">Employment Deductions (50%, max ฿100k)</span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(payrollResult.employment_deductions) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(payrollResult.employment_deductions) }}</span>
                   </div>
                   <div class="waterfall-row deduction">
                     <span class="waterfall-label indent">Personal Allowances</span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(payrollResult.personal_allowances_total) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(payrollResult.personal_allowances_total) }}</span>
                   </div>
                   <div class="waterfall-row deduction">
                     <span class="waterfall-label indent">Social Security (Annual)</span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(payrollResult.social_security_annual) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(payrollResult.social_security_annual) }}</span>
                   </div>
                   <div class="waterfall-row deduction">
                     <span class="waterfall-label indent">{{ payrollResult.provident_fund_type || 'Provident Fund' }}</span>
-                    <span class="font-mono deduction-amount">−{{ fmtCurrency(payrollResult.provident_fund_annual) }}</span>
+                    <span class="font-mono deduction-amount">−{{ formatCurrency(payrollResult.provident_fund_annual) }}</span>
                   </div>
                   <div class="waterfall-divider" />
                   <div class="waterfall-row total-deductions">
                     <span class="waterfall-label">Total Deductions</span>
-                    <span class="font-mono font-semibold">{{ fmtCurrency(payrollResult.total_deductions) }}</span>
+                    <span class="font-mono font-semibold">{{ formatCurrency(payrollResult.total_deductions) }}</span>
                   </div>
                   <div class="waterfall-row taxable">
                     <span class="waterfall-label">Taxable Income</span>
-                    <span class="font-mono font-semibold">{{ fmtCurrency(payrollResult.taxable_income) }}</span>
+                    <span class="font-mono font-semibold">{{ formatCurrency(payrollResult.taxable_income) }}</span>
                   </div>
                 </div>
               </a-card>
@@ -474,10 +474,10 @@
                           <strong>Annual Tax</strong>
                         </a-table-summary-cell>
                         <a-table-summary-cell align="right">
-                          <strong class="font-mono">{{ fmtCurrency(payrollResult.annual_tax_amount) }}</strong>
+                          <strong class="font-mono">{{ formatCurrency(payrollResult.annual_tax_amount) }}</strong>
                         </a-table-summary-cell>
                         <a-table-summary-cell align="right">
-                          <strong class="font-mono">{{ fmtCurrency(payrollResult.monthly_tax_amount) }} /mo</strong>
+                          <strong class="font-mono">{{ formatCurrency(payrollResult.monthly_tax_amount) }} /mo</strong>
                         </a-table-summary-cell>
                       </a-table-summary-row>
                     </a-table-summary>
@@ -514,6 +514,7 @@ import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { taxCalculationApi, employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatCurrency } from '@/utils/formatters'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -659,12 +660,6 @@ const bracketColumns = [
   { title: 'Income in Bracket', key: 'income_in_bracket', width: 160, align: 'right' },
   { title: 'Tax Amount',        key: 'tax',              width: 140, align: 'right' },
 ]
-
-function fmtCurrency(val) {
-  if (val == null || val === '') return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
 
 function rateColor(rate) {
   const pct = parseFloat(rate)

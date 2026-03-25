@@ -92,8 +92,6 @@
       <div class="section-title">Contact</div>
       <div class="info-grid">
         <InfoField label="Mobile Phone" :value="form.mobile_phone" />
-      </div>
-      <div class="info-grid" style="margin-top: 12px;">
         <div class="info-field-wide">
           <InfoField label="Permanent Address" :value="form.permanent_address" />
         </div>
@@ -143,32 +141,77 @@ defineProps({
 
 <style scoped>
 .form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   margin-bottom: 12px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1.5px solid var(--color-border);
+}
+.form-section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
 }
 .form-section-title:first-child { margin-top: 0; }
 .form-section-title:not(:first-child) { margin-top: 8px; }
 
 .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   margin: 20px 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--color-border);
+}
+.section-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
 }
 .section-title:first-child { margin-top: 0; }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.info-grid > :deep(:nth-child(n+4)) {
+  border-top: 1px solid var(--color-border-light);
+}
+.info-grid :deep(.info-value) {
+  border-right: 0.5px solid var(--color-border-light);
+}
+.info-grid > :deep(:nth-child(3n) .info-value) {
+  border-right: none;
 }
 .info-field-wide {
   grid-column: span 3;
+}
+.info-field-wide:not(:first-child) {
+  border-top: 1px solid var(--color-border-light);
+}
+.info-field-wide :deep(.info-label) {
+  flex: 0 0 12.67%;
 }
 </style>

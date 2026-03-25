@@ -68,12 +68,13 @@ export async function subscribeUserChannels(userId, { authStore, notificationSto
 
   userChannel.notification((notification) => {
     if (notificationStore) {
-      notificationStore.fetchUnreadCount()
+      notificationStore.handleRealtimeNotification(notification)
     }
   })
 
   userChannel.listen('.user.profile-updated', (e) => {
-    authStore.updateUserFromEvent(e)
-    authStore.broadcastProfileUpdate(e)
+    if (!e.data) return
+    authStore.updateUserFromEvent(e.data)
+    authStore.broadcastProfileUpdate(e.data)
   })
 }

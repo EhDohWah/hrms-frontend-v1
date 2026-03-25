@@ -1,8 +1,7 @@
-import client, { initCsrf } from './axios'
+import client from './axios'
 
 export const authApi = {
-  async login(email, password) {
-    await initCsrf() // Must set XSRF-TOKEN cookie before login
+  login(email, password) {
     return client.post('/login', { email, password })
   },
   logout() {

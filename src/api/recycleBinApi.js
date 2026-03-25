@@ -27,4 +27,8 @@ export const recycleBinApi = {
   /** Permanently delete a legacy record */
   permanentDeleteLegacy: (deletedRecordId) =>
     client.delete(`/recycle-bin/legacy/${deletedRecordId}`),
+
+  /** Bulk permanently delete records (soft-deleted + legacy) */
+  bulkPermanentDelete: (items) =>
+    client.post('/recycle-bin/bulk-permanent-delete', { items }),
 }

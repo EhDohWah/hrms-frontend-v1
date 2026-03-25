@@ -16,19 +16,6 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <a-select
-          v-model:value="filters.status"
-          placeholder="Status"
-          allow-clear
-          class="filter-input"
-          style="width: 140px"
-          @change="onSearchOrFilterChange"
-        >
-          <a-select-option value="planned">Planned</a-select-option>
-          <a-select-option value="ongoing">Ongoing</a-select-option>
-          <a-select-option value="completed">Completed</a-select-option>
-          <a-select-option value="cancelled">Cancelled</a-select-option>
-        </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('training_list')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
@@ -51,19 +38,18 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'dates'">
+          <template v-if="column.key === 'title'">
+            <router-link :to="{ name: 'training-detail', params: { id: record.id } }" class="cell-link">
+              <span class="cell-name">{{ record.title }}</span>
+            </router-link>
+          </template>
+          <template v-else-if="column.key === 'dates'">
             {{ formatDate(record.start_date) }} → {{ formatDate(record.end_date) }}
-          </template>
-          <template v-else-if="column.key === 'type'">
-            <a-tag size="small">{{ record.type || '—' }}</a-tag>
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button v-if="authStore.canUpdate('training_list')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
-              <a-button v-if="authStore.canDelete('training_list')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+              <a-button v-if="authStore.canUpdate('training_list')" size="small" type="link" @click.stop="openEdit(record)">Edit</a-button>
+              <a-button v-if="authStore.canDelete('training_list')" size="small" type="link" danger @click.stop="handleDelete(record)">Delete</a-button>
             </a-space>
           </template>
         </template>
@@ -82,64 +68,38 @@
         <a-form-item label="Title" required>
           <a-input v-model:value="form.title" placeholder="Enter training title" />
         </a-form-item>
+        <a-form-item label="Organizer" required>
+          <a-input v-model:value="form.organizer" placeholder="Enter organizer name" />
+        </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Type">
-              <a-select v-model:value="form.type" placeholder="Select type" allow-clear>
-                <a-select-option value="internal">Internal</a-select-option>
-                <a-select-option value="external">External</a-select-option>
-                <a-select-option value="online">Online</a-select-option>
-                <a-select-option value="workshop">Workshop</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Status">
-              <a-select v-model:value="form.status" placeholder="Select status">
-                <a-select-option value="planned">Planned</a-select-option>
-                <a-select-option value="ongoing">Ongoing</a-select-option>
-                <a-select-option value="completed">Completed</a-select-option>
-                <a-select-option value="cancelled">Cancelled</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Start Date">
+            <a-form-item label="Start Date" required>
               <a-date-picker v-model:value="form.start_date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="End Date">
+            <a-form-item label="End Date" required>
               <a-date-picker v-model:value="form.end_date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="Trainer">
-          <a-input v-model:value="form.trainer" placeholder="Enter trainer name" />
-        </a-form-item>
-        <a-form-item label="Location">
-          <a-input v-model:value="form.location" placeholder="Enter location" />
-        </a-form-item>
-        <a-form-item label="Description">
-          <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="3" />
-        </a-form-item>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { trainingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatDate } from '@/utils/formatters'
+import { cleanParams } from '@/utils/helpers'
+import { PAGINATION_DEFAULTS } from '@/constants/config'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
@@ -148,23 +108,18 @@ const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
-const filters = reactive({ status: undefined })
-const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
+const pagination = reactive({ current_page: 1, per_page: PAGINATION_DEFAULTS.perPage, total: 0 })
 const selectedRowKeys = ref([])
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
-  title: '', type: undefined, status: 'planned', start_date: null, end_date: null,
-  trainer: '', location: '', description: '',
+  title: '', organizer: '', start_date: null, end_date: null,
 })
 
 const columns = [
-  { title: 'Title', dataIndex: 'title', width: 240 },
-  { title: 'Type', key: 'type', width: 110, align: 'center' },
-  { title: 'Dates', key: 'dates', width: 240 },
-  { title: 'Trainer', dataIndex: 'trainer', width: 160 },
-  { title: 'Location', dataIndex: 'location', width: 160, ellipsis: true },
-  { title: 'Status', key: 'status', width: 110, align: 'center' },
+  { title: 'Title', key: 'title', width: 260 },
+  { title: 'Organizer', dataIndex: 'organizer', width: 200 },
+  { title: 'Period', key: 'dates', width: 260 },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
 
@@ -174,30 +129,25 @@ const tablePagination = computed(() => ({
   total: pagination.total,
   showSizeChanger: true,
   showTotal: (total) => `${total} trainings`,
-  pageSizeOptions: ['10', '20', '50'],
+  pageSizeOptions: PAGINATION_DEFAULTS.pageSizeOptions,
 }))
-
-function formatDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
-
-function statusColor(status) {
-  const map = { planned: 'blue', ongoing: 'orange', completed: 'green', cancelled: 'red' }
-  return map[status?.toLowerCase()] || 'default'
-}
 
 async function fetchItems() {
   loading.value = true
   try {
-    const params = {
+    const params = cleanParams({
       page: pagination.current_page,
       per_page: pagination.per_page,
-      ...(search.value && { search: search.value }),
-      ...(filters.status && { filter_status: filters.status }),
-    }
+      search: search.value || null,
+    })
     const { data } = await trainingApi.list(params, { signal: getSignal() })
     items.value = data.data || []
     if (data.pagination) Object.assign(pagination, data.pagination)
-  } catch (err) { if (err.name !== 'CanceledError') message.error('Failed to load training records') }
-  loading.value = false
+  } catch (err) {
+    if (err.name !== 'CanceledError') message.error('Failed to load training records')
+  } finally {
+    loading.value = false
+  }
 }
 
 function onSearchOrFilterChange() {
@@ -213,8 +163,7 @@ function handleTableChange(pag) {
 
 function resetForm() {
   Object.assign(form, {
-    title: '', type: undefined, status: 'planned', start_date: null, end_date: null,
-    trainer: '', location: '', description: '',
+    title: '', organizer: '', start_date: null, end_date: null,
   })
 }
 
@@ -228,34 +177,35 @@ function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
     title: record.title || '',
-    type: record.type || undefined,
-    status: record.status || 'planned',
+    organizer: record.organizer || '',
     start_date: record.start_date || null,
     end_date: record.end_date || null,
-    trainer: record.trainer || '',
-    location: record.location || '',
-    description: record.description || '',
   })
   modalVisible.value = true
 }
 
 async function handleSave() {
   if (!form.title) return message.warning('Title is required')
+  if (!form.organizer) return message.warning('Organizer is required')
+  if (!form.start_date) return message.warning('Start date is required')
+  if (!form.end_date) return message.warning('End date is required')
   saving.value = true
   try {
+    const payload = cleanParams({ ...form })
     if (editingItem.value) {
-      await trainingApi.update(editingItem.value.id, { ...form })
+      await trainingApi.update(editingItem.value.id, payload)
       message.success('Training updated')
     } else {
-      await trainingApi.store({ ...form })
+      await trainingApi.store(payload)
       message.success('Training created')
     }
     modalVisible.value = false
     fetchItems()
   } catch (err) {
     message.error(err.response?.data?.message || 'Failed to save')
+  } finally {
+    saving.value = false
   }
-  saving.value = false
 }
 
 function handleDelete(record) {
@@ -320,5 +270,7 @@ onMounted(() => {
   }
 }
 .page-header-stats { display: flex; gap: 6px; }
+.cell-link { text-decoration: none; color: inherit; }
+.cell-name { font-weight: 600; font-size: 14px; }
 .modal-form { margin-top: 16px; }
 </style>

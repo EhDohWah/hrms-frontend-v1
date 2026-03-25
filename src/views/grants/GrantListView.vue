@@ -41,7 +41,7 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'organization'">
-            <a-tag :color="record.organization === 'SMRU' ? 'blue' : 'green'" size="small">
+            <a-tag :color="getOrgColor(record.organization)" size="small">
               {{ record.organization }}
             </a-tag>
           </template>
@@ -83,10 +83,10 @@
             >
               <template #bodyCell="{ column, record: pos }">
                 <template v-if="column.key === 'grant_salary'">
-                  {{ pos.grant_salary ? `฿${Number(pos.grant_salary).toLocaleString('en', { minimumFractionDigits: 2 })}` : '—' }}
+                  {{ formatCurrency(pos.grant_salary) }}
                 </template>
                 <template v-else-if="column.key === 'grant_benefit'">
-                  {{ pos.grant_benefit ? `฿${Number(pos.grant_benefit).toLocaleString('en', { minimumFractionDigits: 2 })}` : '—' }}
+                  {{ formatCurrency(pos.grant_benefit) }}
                 </template>
                 <template v-else-if="column.key === 'grant_level_of_effort'">
                   {{ pos.grant_level_of_effort != null ? `${(Number(pos.grant_level_of_effort) * 100).toFixed(0)}%` : '—' }}
@@ -121,8 +121,7 @@
       <a-form :model="form" layout="vertical" class="modal-form">
         <a-form-item label="Organization" required>
           <a-select v-model:value="form.organization" placeholder="Select organization">
-            <a-select-option value="SMRU">SMRU</a-select-option>
-            <a-select-option value="BHF">BHF</a-select-option>
+            <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="Grant Name" required>
@@ -197,15 +196,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
 import { grantApi, grantItemApi } from '@/api'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { formatCurrency, formatDate } from '@/utils/formatters'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
@@ -237,6 +237,7 @@ const columns = [
   { title: 'Organization', key: 'organization', width: 120, align: 'center' },
   { title: 'Grant Code', key: 'code', width: 150 },
   { title: 'Grant Name', dataIndex: 'name', ellipsis: true },
+  { title: 'Description', dataIndex: 'description', ellipsis: true },
   { title: 'End Date', key: 'end_date', width: 140 },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
@@ -261,15 +262,13 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50'],
 }))
 
-function formatDate(d) { return d ? dayjs(d).format('DD/MM/YYYY') : '—' }
-
 function calcMonthlyCost(pos) {
   const salary = Number(pos.grant_salary) || 0
   const benefit = Number(pos.grant_benefit) || 0
   const effort = Number(pos.grant_level_of_effort) || 0
   const count = Number(pos.grant_position_number) || 0
   const monthly = (salary + benefit) * effort * count
-  return monthly ? `฿${monthly.toLocaleString('en', { minimumFractionDigits: 2 })}` : '—'
+  return monthly ? formatCurrency(monthly) : '—'
 }
 
 // ---- Grant CRUD ----

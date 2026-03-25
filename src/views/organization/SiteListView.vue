@@ -16,6 +16,17 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <a-select
+          v-model:value="filters.is_active"
+          placeholder="Status"
+          allow-clear
+          class="filter-input"
+          style="width: 140px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option :value="true">Active</a-select-option>
+          <a-select-option :value="false">Inactive</a-select-option>
+        </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('sites')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
@@ -38,9 +49,19 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
-            <a-tag :color="record.status === 'active' ? 'green' : 'red'" size="small">
-              {{ record.status || '—' }}
+          <template v-if="column.key === 'code'">
+            <span class="font-mono">{{ record.code || '—' }}</span>
+          </template>
+          <template v-else-if="column.key === 'contact'">
+            <template v-if="record.contact_person">
+              <div>{{ record.contact_person }}</div>
+              <div v-if="record.contact_phone" class="cell-sub">{{ record.contact_phone }}</div>
+            </template>
+            <span v-else class="text-muted">—</span>
+          </template>
+          <template v-else-if="column.key === 'is_active'">
+            <a-tag :color="record.is_active ? 'green' : 'red'" size="small">
+              {{ record.is_active ? 'Active' : 'Inactive' }}
             </a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
@@ -59,22 +80,50 @@
       :title="editingItem ? 'Edit Site' : 'Add Site'"
       @ok="handleSave"
       :confirm-loading="saving"
+      :width="'min(95vw, 560px)'"
     >
       <a-form :model="form" layout="vertical" class="modal-form">
-        <a-form-item label="Name" required>
-          <a-input v-model:value="form.name" placeholder="Enter site name" />
-        </a-form-item>
-        <a-form-item label="Location">
-          <a-input v-model:value="form.location" placeholder="Enter location" />
+        <a-row :gutter="16">
+          <a-col :span="16">
+            <a-form-item label="Name" required>
+              <a-input v-model:value="form.name" placeholder="Enter site name" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Code" required>
+              <a-input v-model:value="form.code" placeholder="e.g. MWK" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Description">
+          <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" />
         </a-form-item>
         <a-form-item label="Address">
           <a-textarea v-model:value="form.address" placeholder="Enter address" :rows="2" />
         </a-form-item>
-        <a-form-item label="Status">
-          <a-select v-model:value="form.status" placeholder="Select status">
-            <a-select-option value="active">Active</a-select-option>
-            <a-select-option value="inactive">Inactive</a-select-option>
-          </a-select>
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="Contact Person">
+              <a-input v-model:value="form.contact_person" placeholder="Full name" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Contact Phone">
+              <a-input v-model:value="form.contact_phone" placeholder="Phone number" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Contact Email">
+              <a-input v-model:value="form.contact_email" placeholder="Email" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Active">
+          <a-switch
+            v-model:checked="form.is_active"
+            checked-children="Active"
+            un-checked-children="Inactive"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -99,16 +148,26 @@ const selectedRowKeys = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
+const filters = reactive({ is_active: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const modalVisible = ref(false)
 const editingItem = ref(null)
-const form = reactive({ name: '', location: '', address: '', status: 'active' })
+const form = reactive({
+  name: '', code: '', description: '', address: '',
+  contact_person: '', contact_phone: '', contact_email: '',
+  is_active: true,
+})
+
+const sortField = ref(null)
+const sortOrder = ref(null)
 
 const columns = [
-  { title: 'Name', dataIndex: 'name', width: 200 },
-  { title: 'Location', dataIndex: 'location', width: 200 },
-  { title: 'Address', dataIndex: 'address', ellipsis: true },
-  { title: 'Status', key: 'status', width: 100, align: 'center' },
+  { title: 'Name', dataIndex: 'name', width: 200, sorter: true },
+  { title: 'Code', key: 'code', width: 100, sorter: true },
+  { title: 'Description', dataIndex: 'description', ellipsis: true },
+  { title: 'Address', dataIndex: 'address', width: 200, ellipsis: true },
+  { title: 'Contact', key: 'contact', width: 180 },
+  { title: 'Status', key: 'is_active', width: 100, align: 'center' },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
 
@@ -128,6 +187,9 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
+      ...(filters.is_active !== undefined && filters.is_active !== null && { is_active: filters.is_active }),
+      ...(sortField.value && { sort_by: sortField.value }),
+      ...(sortOrder.value && { sort_direction: sortOrder.value === 'ascend' ? 'asc' : 'desc' }),
     }
     const { data } = await siteApi.list(params, { signal: getSignal() })
     items.value = data.data || []
@@ -143,14 +205,28 @@ function onSearchOrFilterChange() {
   fetchItems()
 }
 
-function handleTableChange(pag) {
+function handleTableChange(pag, _filters, sorter) {
   pagination.current_page = pag.current
   pagination.per_page = pag.pageSize
+
+  if (sorter && sorter.columnKey) {
+    const sortMap = { name: 'name', code: 'code' }
+    sortField.value = sortMap[sorter.columnKey] || null
+    sortOrder.value = sorter.order || null
+  } else {
+    sortField.value = null
+    sortOrder.value = null
+  }
+
   fetchItems()
 }
 
 function resetForm() {
-  Object.assign(form, { name: '', location: '', address: '', status: 'active' })
+  Object.assign(form, {
+    name: '', code: '', description: '', address: '',
+    contact_person: '', contact_phone: '', contact_email: '',
+    is_active: true,
+  })
 }
 
 function openCreate() {
@@ -161,12 +237,22 @@ function openCreate() {
 
 function openEdit(record) {
   editingItem.value = record
-  Object.assign(form, { name: record.name || '', location: record.location || '', address: record.address || '', status: record.status || 'active' })
+  Object.assign(form, {
+    name: record.name || '',
+    code: record.code || '',
+    description: record.description || '',
+    address: record.address || '',
+    contact_person: record.contact_person || '',
+    contact_phone: record.contact_phone || '',
+    contact_email: record.contact_email || '',
+    is_active: record.is_active !== false,
+  })
   modalVisible.value = true
 }
 
 async function handleSave() {
-  if (!form.name) return message.warning('Name is required')
+  if (!form.name) return message.warning('Site name is required')
+  if (!form.code) return message.warning('Site code is required')
   saving.value = true
   try {
     if (editingItem.value) {
@@ -179,7 +265,13 @@ async function handleSave() {
     modalVisible.value = false
     fetchItems()
   } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
+    const resp = err.response?.data
+    if (resp?.errors) {
+      const firstErr = Object.values(resp.errors)[0]
+      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+    } else {
+      message.error(resp?.message || 'Failed to save')
+    }
   }
   saving.value = false
 }
@@ -246,5 +338,6 @@ onMounted(() => {
   }
 }
 .page-header-stats { display: flex; gap: 6px; }
+.cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .modal-form { margin-top: 16px; }
 </style>

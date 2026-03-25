@@ -13,8 +13,7 @@
           style="width: 130px"
           @change="onFilterChange"
         >
-          <a-select-option value="SMRU">SMRU</a-select-option>
-          <a-select-option value="BHF">BHF</a-select-option>
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
         </a-select>
         <a-select
           v-model:value="filters.to_organization"
@@ -24,8 +23,7 @@
           style="width: 130px"
           @change="onFilterChange"
         >
-          <a-select-option value="SMRU">SMRU</a-select-option>
-          <a-select-option value="BHF">BHF</a-select-option>
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
         </a-select>
         <a-input
           v-model:value="search"
@@ -68,13 +66,13 @@
           </template>
 
           <template v-else-if="column.key === 'from_org'">
-            <a-tag :color="record.from_organization === 'SMRU' ? 'blue' : 'green'" size="small">
+            <a-tag :color="getOrgColor(record.from_organization)" size="small">
               {{ record.from_organization || '—' }}
             </a-tag>
           </template>
 
           <template v-else-if="column.key === 'to_org'">
-            <a-tag :color="record.to_organization === 'SMRU' ? 'blue' : 'green'" size="small">
+            <a-tag :color="getOrgColor(record.to_organization)" size="small">
               {{ record.to_organization || '—' }}
             </a-tag>
           </template>
@@ -132,12 +130,12 @@
             <span class="font-mono">{{ detailItem.employee?.staff_id || '—' }}</span>
           </a-descriptions-item>
           <a-descriptions-item label="From Organization">
-            <a-tag :color="detailItem.from_organization === 'SMRU' ? 'blue' : 'green'">
+            <a-tag :color="getOrgColor(detailItem.from_organization)">
               {{ detailItem.from_organization }}
             </a-tag>
           </a-descriptions-item>
           <a-descriptions-item label="To Organization">
-            <a-tag :color="detailItem.to_organization === 'SMRU' ? 'blue' : 'green'">
+            <a-tag :color="getOrgColor(detailItem.to_organization)">
               {{ detailItem.to_organization }}
             </a-tag>
           </a-descriptions-item>
@@ -169,6 +167,7 @@ import { SearchOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { transferApi } from '@/api'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
 
 const dayjs = inject('$dayjs')
 const appStore = useAppStore()
@@ -186,7 +185,7 @@ const columns = [
   { title: 'Employee', key: 'employee', width: 200 },
   { title: 'From', key: 'from_org', width: 100, align: 'center' },
   { title: 'To', key: 'to_org', width: 100, align: 'center' },
-  { title: 'SMRU Start Date', key: 'from_date', width: 130 },
+  { title: 'SMRU/BHF Start Date', key: 'from_date', width: 150 },
   { title: 'Effective Date', key: 'to_date', width: 130 },
   { title: 'Reason', key: 'reason', width: 200 },
   { title: 'Created By', key: 'created_by', width: 140 },

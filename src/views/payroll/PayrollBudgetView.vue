@@ -35,7 +35,7 @@
           </div>
         </template>
         <template v-else-if="column.key === 'org'">
-          <a-tag :color="record.organization === 'SMRU' ? 'blue' : 'green'" size="small">{{ record.organization }}</a-tag>
+          <a-tag :color="getOrgColor(record.organization)" size="small">{{ record.organization }}</a-tag>
         </template>
         <template v-else-if="column.key === 'grant'">
           <span class="font-mono" style="font-size: 12px">{{ record.grant_name || '—' }}</span>
@@ -45,11 +45,11 @@
         </template>
         <template v-else-if="column.dataIndex?.startsWith?.('month_')">
           <span class="font-mono" :class="{ 'text-empty': !getMonthValue(record, column.dataIndex) }">
-            {{ fmtCurrency(getMonthValue(record, column.dataIndex)) }}
+            {{ formatCurrency(getMonthValue(record, column.dataIndex)) }}
           </span>
         </template>
         <template v-else-if="column.key === 'total'">
-          <span class="font-mono font-semibold">{{ fmtCurrency(getRowTotal(record)) }}</span>
+          <span class="font-mono font-semibold">{{ formatCurrency(getRowTotal(record)) }}</span>
         </template>
       </template>
 
@@ -60,10 +60,10 @@
               <strong>Total ({{ data.length }} rows)</strong>
             </a-table-summary-cell>
             <a-table-summary-cell v-for="month in months" :key="month.key" :index="4 + months.indexOf(month)" align="right">
-              <span class="font-mono font-semibold">{{ fmtCurrency(getColumnTotal(month.key)) }}</span>
+              <span class="font-mono font-semibold">{{ formatCurrency(getColumnTotal(month.key)) }}</span>
             </a-table-summary-cell>
             <a-table-summary-cell :index="4 + months.length" align="right">
-              <span class="font-mono font-semibold">{{ fmtCurrency(getGrandTotal()) }}</span>
+              <span class="font-mono font-semibold">{{ formatCurrency(getGrandTotal()) }}</span>
             </a-table-summary-cell>
           </a-table-summary-row>
         </a-table-summary>
@@ -74,6 +74,8 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { getOrgColor } from '@/constants/organizations'
+import { formatCurrency } from '@/utils/formatters'
 
 const props = defineProps({
   data: { type: Array, default: () => [] },
@@ -132,11 +134,6 @@ function getGrandTotal() {
   return props.data.reduce((sum, r) => sum + getRowTotal(r), 0)
 }
 
-function fmtCurrency(val) {
-  if (val == null || val === '' || val === 0) return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
 </script>
 
 <style scoped>

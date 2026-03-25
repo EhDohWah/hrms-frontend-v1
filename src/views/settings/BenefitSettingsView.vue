@@ -150,16 +150,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { benefitSettingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatCurrency, formatDate } from '@/utils/formatters'
 
 const getSignal = useAbortController()
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
@@ -202,15 +202,11 @@ function categoryColor(cat) {
   return map[cat] || 'default'
 }
 
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY') : '—'
-}
-
 function formatValue(record) {
   if (record.setting_type === 'percentage') return `${record.setting_value}%`
   if (record.setting_type === 'boolean') return Number(record.setting_value) ? 'Yes' : 'No'
   const n = Number(record.setting_value)
-  return isNaN(n) ? String(record.setting_value) : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return isNaN(n) ? String(record.setting_value) : formatCurrency(n)
 }
 
 async function fetchItems() {

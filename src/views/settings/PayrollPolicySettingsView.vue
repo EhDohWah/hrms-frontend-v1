@@ -125,16 +125,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { payrollPolicyApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatDate } from '@/utils/formatters'
 
 const getSignal = useAbortController()
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
@@ -162,10 +162,6 @@ const columns = [
   { title: 'Status', key: 'status', width: 90, align: 'center' },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
-
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY') : '—'
-}
 
 function formatValue(record) {
   if (record.setting_type === 'percentage') return `${record.policy_value}%`

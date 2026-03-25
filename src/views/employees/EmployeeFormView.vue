@@ -94,21 +94,17 @@
                 </template>
                 <RecordsTab :employee="employee" @refresh="loadEmployee" />
               </a-tab-pane>
-              <a-tab-pane v-if="isEditMode" key="employment">
+              <a-tab-pane v-if="isEditMode" key="assignment">
                 <template #tab>
                   <a-tooltip title="Saves immediately per action — not affected by the Save button" placement="bottom">
-                    <span class="live-tab-label">Employment</span>
+                    <span class="live-tab-label">Employment & Funding</span>
                   </a-tooltip>
                 </template>
-                <EmploymentTab :employee="employee" @refresh="loadEmployee" />
-              </a-tab-pane>
-              <a-tab-pane v-if="isEditMode" key="funding">
-                <template #tab>
-                  <a-tooltip title="Saves immediately per action — not affected by the Save button" placement="bottom">
-                    <span class="live-tab-label">Funding</span>
-                  </a-tooltip>
-                </template>
-                <FundingTab :employee="employee" @refresh="loadEmployee" />
+                <AssignmentTab
+                  :employee="employee"
+                  :auto-open-employment="guidedCreate"
+                  @refresh="loadEmployee"
+                />
               </a-tab-pane>
             </a-tabs>
           </a-form>
@@ -158,8 +154,7 @@ import BasicInfoTab from './tabs/BasicInfoTab.vue'
 import IdentificationTab from './tabs/IdentificationTab.vue'
 import ContactFamilyTab from './tabs/ContactFamilyTab.vue'
 import FinancialTab from './tabs/FinancialTab.vue'
-import EmploymentTab from './tabs/EmploymentTab.vue'
-import FundingTab from './tabs/FundingTab.vue'
+import AssignmentTab from './tabs/AssignmentTab.vue'
 import LeaveTab from './tabs/LeaveTab.vue'
 import RecordsTab from './tabs/RecordsTab.vue'
 
@@ -177,16 +172,18 @@ const activeTab = ref('basic_info')
 
 const transferModalOpen = ref(false)
 const isEditMode = computed(() => !!route.params.id)
+const guidedCreate = computed(() => !!window.history.state?.autoOpenEmployment)
 const canSave = computed(() => isEditMode.value ? authStore.canUpdate('employees') : authStore.canCreate('employees'))
 
-const allTabs = ['basic_info', 'identification', 'contact_family', 'financial', 'leave', 'records', 'employment', 'funding']
+const allTabs = ['basic_info', 'identification', 'contact_family', 'financial', 'leave', 'records', 'assignment']
 
 // Tabs that manage their own data — the top Save button is irrelevant for these
-const LIVE_TABS = new Set(['leave', 'records', 'employment', 'funding'])
+const LIVE_TABS = new Set(['leave', 'records', 'assignment'])
 const isLiveTab = computed(() => LIVE_TABS.has(activeTab.value))
 
 // ======================== Form ========================
 const defaultFormValues = {
+  organization: undefined,
   staff_id: '', first_name_en: '', gender: undefined,
   date_of_birth: null, status: undefined,
   initial_en: '', initial_th: '', last_name_en: '', first_name_th: '', last_name_th: '',
@@ -317,6 +314,7 @@ function buildPayload() {
 }
 
 function validateForm() {
+  if (!form.organization) { activeTab.value = 'basic_info'; message.warning('Organization is required'); return false }
   if (!form.staff_id) { activeTab.value = 'basic_info'; message.warning('Staff ID is required'); return false }
   if (!form.first_name_en) { activeTab.value = 'basic_info'; message.warning('First Name (EN) is required'); return false }
   if (!form.gender) { activeTab.value = 'basic_info'; message.warning('Gender is required'); return false }
@@ -342,10 +340,15 @@ async function handleSave() {
       await loadEmployee()
     } else {
       const { data } = await employeeApi.store(buildPayload())
-      message.success('Employee created')
       takeSnapshot()
       const newId = data.data?.id || data.id
-      router.replace({ name: 'employee-detail', params: { id: newId } })
+      message.success('Employee created — now add employment details')
+      router.replace({
+        name: 'employee-detail',
+        params: { id: newId },
+        hash: '#assignment',
+        state: { autoOpenEmployment: true },
+      })
     }
   } catch (err) {
     const resp = err.response?.data

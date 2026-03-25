@@ -30,6 +30,7 @@
             v-if="!item.permission || authStore.canRead(item.permission)"
             class="nav-item"
             :class="{ active: isActive(item) }"
+            :data-tour="item.tourKey || undefined"
             @click="navigate(item)"
           >
             <component :is="item.icon" class="nav-icon" />
@@ -48,7 +49,7 @@
 
       <template v-for="section in visibleSections" :key="section.title">
         <div class="nav-divider" />
-        <div class="nav-section">
+        <div class="nav-section" :data-tour="section.tourKey || undefined">
           <div class="nav-section-title" v-if="!appStore.sidebarCollapsed || appStore.isMobile">{{ section.title }}</div>
           <template v-for="item in section.items" :key="item.key">
             <div
@@ -69,7 +70,7 @@
 
     <!-- Bottom: Collapse toggle (desktop only) -->
     <div class="sidebar-footer">
-      <div class="nav-item" @click="appStore.toggleSidebar()">
+      <div class="nav-item" data-tour="sidebar-collapse" @click="appStore.toggleSidebar()">
         <MenuFoldOutlined v-if="!appStore.sidebarCollapsed" class="nav-icon" />
         <MenuUnfoldOutlined v-else class="nav-icon" />
         <transition name="fade">
@@ -120,6 +121,7 @@ import {
   LockOutlined,
   SwapOutlined,
   HistoryOutlined,
+  BlockOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -129,12 +131,13 @@ const authStore = useAuthStore()
 const notifStore = useNotificationStore()
 
 const mainNavItems = computed(() => [
-  { key: 'dashboard', label: 'Dashboard', icon: DashboardOutlined, route: 'dashboard' },
+  { key: 'dashboard', label: 'Dashboard', icon: DashboardOutlined, route: 'dashboard', tourKey: 'nav-dashboard' },
   {
     key: 'notifications',
     label: 'Notifications',
     icon: BellOutlined,
     route: 'notifications',
+    tourKey: 'nav-notifications',
     badge: () => notifStore.unreadCount || 0,
   },
 ])
@@ -142,6 +145,7 @@ const mainNavItems = computed(() => [
 const navSections = computed(() => [
   {
     title: 'Grants',
+    tourKey: 'grants-menu',
     items: [
       { key: 'grants', label: 'Grants', icon: TrophyOutlined, route: 'grants', permission: 'grants_list' },
       { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grants_list' },
@@ -149,6 +153,7 @@ const navSections = computed(() => [
   },
   {
     title: 'Recruitment',
+    tourKey: 'recruitment-menu',
     items: [
       { key: 'interviews', label: 'Interviews', icon: UsergroupAddOutlined, route: 'interviews', permission: 'interviews' },
       { key: 'job-offers', label: 'Job Offers', icon: SolutionOutlined, route: 'job-offers', permission: 'job_offers' },
@@ -156,6 +161,7 @@ const navSections = computed(() => [
   },
   {
     title: 'Management',
+    tourKey: 'management-menu',
     items: [
       { key: 'employees', label: 'Employees', icon: TeamOutlined, route: 'employees', permission: 'employees' },
       { key: 'payroll', label: 'Payroll', icon: DollarOutlined, route: 'payroll', permission: 'employee_salary' },
@@ -163,6 +169,7 @@ const navSections = computed(() => [
   },
   {
     title: 'Leave',
+    tourKey: 'leave-menu',
     items: [
       { key: 'leave-requests', label: 'Leave Requests', icon: CalendarOutlined, route: 'leave-requests', permission: 'leaves_admin' },
       { key: 'leave-balances', label: 'Leave Balances', icon: ScheduleOutlined, route: 'leave-balances', permission: 'leave_balances' },
@@ -171,6 +178,7 @@ const navSections = computed(() => [
   },
   {
     title: 'Attendance',
+    tourKey: 'attendance-menu',
     items: [
       { key: 'attendance', label: 'Attendance', icon: AuditOutlined, route: 'attendance', permission: 'attendance_admin' },
       { key: 'holidays', label: 'Holidays', icon: SmileOutlined, route: 'holidays', permission: 'holidays' },
@@ -178,12 +186,15 @@ const navSections = computed(() => [
   },
   {
     title: 'Training',
+    tourKey: 'training-menu',
     items: [
       { key: 'training', label: 'Training', icon: ReadOutlined, route: 'training', permission: 'training_list' },
+      { key: 'employee-training', label: 'Employee Training', icon: SolutionOutlined, route: 'employee-training', permission: 'employee_training' },
     ],
   },
   {
     title: 'HRM',
+    tourKey: 'hrm-menu',
     items: [
       { key: 'personnel-actions', label: 'Personnel Actions', icon: SwapOutlined, route: 'personnel-actions', permission: 'personnel_actions' },
       { key: 'transfers', label: 'Transfers', icon: SwapOutlined, route: 'transfers', permission: 'transfer' },
@@ -192,26 +203,31 @@ const navSections = computed(() => [
   },
   {
     title: 'Reports',
+    tourKey: 'reports-menu',
     items: [
       { key: 'reports', label: 'Reports', icon: BarChartOutlined, route: 'reports', permission: 'report_list' },
     ],
   },
   {
     title: 'Data Management',
+    tourKey: 'data-management-menu',
     items: [
       { key: 'data-import', label: 'Data Import', icon: UploadOutlined, route: 'data-import', permission: 'employees' },
     ],
   },
   {
     title: 'Organization',
+    tourKey: 'organization-menu',
     items: [
       { key: 'sites', label: 'Sites', icon: BankOutlined, route: 'sites', permission: 'sites' },
       { key: 'departments', label: 'Departments', icon: ApartmentOutlined, route: 'departments', permission: 'departments' },
       { key: 'positions', label: 'Positions', icon: IdcardOutlined, route: 'positions', permission: 'positions' },
+      { key: 'section-departments', label: 'Section Dept.', icon: BlockOutlined, route: 'section-departments', permission: 'section_departments' },
     ],
   },
   {
     title: 'Settings',
+    tourKey: 'settings-menu',
     items: [
       { key: 'benefit-settings', label: 'Benefit Settings', icon: SafetyCertificateOutlined, route: 'benefit-settings', permission: 'benefit_settings' },
       { key: 'tax-settings', label: 'Tax Settings', icon: PercentageOutlined, route: 'tax-settings', permission: 'tax_settings' },
@@ -222,6 +238,7 @@ const navSections = computed(() => [
   },
   {
     title: 'Administration',
+    tourKey: 'admin-menu',
     items: [
       { key: 'admin-users', label: 'Users', icon: UserOutlined, route: 'admin-users', permission: 'users' },
       { key: 'admin-roles', label: 'Roles', icon: LockOutlined, route: 'admin-roles', permission: 'roles' },
@@ -229,6 +246,7 @@ const navSections = computed(() => [
   },
   {
     title: 'System',
+    tourKey: 'system-menu',
     items: [
       { key: 'activity-logs', label: 'Activity Log', icon: HistoryOutlined, route: 'activity-logs' },
       { key: 'recycle-bin', label: 'Recycle Bin', icon: DeleteOutlined, route: 'recycle-bin', permission: 'recycle_bin_list' },

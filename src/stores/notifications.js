@@ -9,21 +9,22 @@ export const useNotificationStore = defineStore('notifications', () => {
   const loading = ref(false)
   const meta = ref({})
   let pollInterval = null
-  let lastFetchTime = 0
   let pollIntervalMs = 30000
   let visibilityHandler = null
+  let isFetching = false
 
   const hasUnread = computed(() => unreadCount.value > 0)
 
   async function fetchUnreadCount() {
-    const now = Date.now()
-    if (now - lastFetchTime < 5000) return
-    lastFetchTime = now
+    if (isFetching) return
+    isFetching = true
     try {
       const { data } = await notificationApi.unreadCount()
       unreadCount.value = data.data?.count || 0
     } catch {
       // Background polling — network errors are expected
+    } finally {
+      isFetching = false
     }
   }
 
@@ -54,24 +55,46 @@ export const useNotificationStore = defineStore('notifications', () => {
     unreadCount.value = 0
   }
 
-  function pauseTimer() {
+  /**
+   * Handle a real-time notification pushed via WebSocket.
+   * Increments unread count and prepends to the list if loaded.
+   */
+  function handleRealtimeNotification(notification) {
+    unreadCount.value += 1
+    if (notifications.value.length > 0) {
+      notifications.value.unshift({
+        id: notification.id,
+        type: notification.type,
+        data: notification,
+        message: notification.message,
+        category: notification.category,
+        category_label: notification.category_label,
+        category_icon: notification.category_icon,
+        category_color: notification.category_color,
+        read_at: null,
+        created_at: notification.created_at || new Date().toISOString(),
+      })
+    }
+  }
+
+  function stopTimer() {
     if (pollInterval) {
       clearInterval(pollInterval)
       pollInterval = null
     }
   }
 
-  function resumeTimer() {
-    if (pollInterval) return
+  function resetTimer() {
+    stopTimer()
     pollInterval = setInterval(fetchUnreadCount, pollIntervalMs)
   }
 
   function handleVisibilityChange() {
     if (document.hidden) {
-      pauseTimer()
+      stopTimer()
     } else {
       fetchUnreadCount()
-      resumeTimer()
+      resetTimer()
     }
   }
 
@@ -79,13 +102,13 @@ export const useNotificationStore = defineStore('notifications', () => {
     stopPolling()
     pollIntervalMs = intervalMs
     fetchUnreadCount()
-    resumeTimer()
+    resetTimer()
     visibilityHandler = handleVisibilityChange
     document.addEventListener('visibilitychange', visibilityHandler)
   }
 
   function stopPolling() {
-    pauseTimer()
+    stopTimer()
     if (visibilityHandler) {
       document.removeEventListener('visibilitychange', visibilityHandler)
       visibilityHandler = null
@@ -95,6 +118,6 @@ export const useNotificationStore = defineStore('notifications', () => {
   return {
     notifications, unreadCount, stats, loading, meta, hasUnread,
     fetchUnreadCount, fetchNotifications, markAsRead, markAllAsRead,
-    startPolling, stopPolling,
+    handleRealtimeNotification, startPolling, stopPolling,
   }
 })

@@ -211,6 +211,10 @@ onMounted(() => fetchLogs())
 .action-updated { color: #1677ff; }
 .action-deleted { color: #ff4d4f; }
 .action-transferred { color: #fa8c16; }
+.action-probation_passed { color: #52c41a; }
+.action-probation_failed { color: #ff4d4f; }
+.action-resigned { color: #fa8c16; }
+.action-acknowledged { color: #1677ff; }
 .activity-action { font-weight: 500; }
 .activity-time {
   color: var(--color-text-muted);

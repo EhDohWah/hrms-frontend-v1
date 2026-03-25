@@ -9,4 +9,6 @@ export const userApi = {
   updateProfilePicture: (formData) => client.post('/user/profile-picture', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  completedTours: () => client.get('/user/tours'),
+  completeTour: (tourKey) => client.post(`/user/tours/${tourKey}/complete`),
 }

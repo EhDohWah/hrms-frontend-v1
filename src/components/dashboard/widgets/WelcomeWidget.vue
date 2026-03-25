@@ -33,8 +33,13 @@ const actions = [
 <style scoped>
 .welcome-actions {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+}
+@media (min-width: 768px) {
+  .welcome-actions {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 .quick-action {
   display: flex;

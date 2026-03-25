@@ -46,8 +46,7 @@
       <a-form layout="vertical">
         <a-form-item label="Organization" required>
           <a-radio-group v-model:value="wizardForm.organization" button-style="solid" size="large">
-            <a-radio-button value="SMRU">SMRU</a-radio-button>
-            <a-radio-button value="BHF">BHF</a-radio-button>
+            <a-radio-button v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-radio-button>
           </a-radio-group>
         </a-form-item>
         <a-alert type="info" show-icon message="Select the organization to generate payroll for. All employees under the selected organization will be included." />
@@ -64,7 +63,7 @@
           <template #message>
             <strong>{{ previewData.summary?.total_employees || 0 }}</strong> employees &middot;
             <strong>{{ previewData.summary?.total_payrolls || 0 }}</strong> payroll records &middot;
-            Total Net: <strong>{{ fmtCurrency(previewData.summary?.total_net_salary) }}</strong>
+            Total Net: <strong>{{ formatCurrency(previewData.summary?.total_net_salary) }}</strong>
             <span v-if="previewData.summary?.advances_needed > 0">
               &middot; <strong>{{ previewData.summary.advances_needed }}</strong> inter-org advances
             </span>
@@ -75,124 +74,80 @@
           <a-alert v-for="(w, i) in previewData.warnings" :key="i" type="warning" :message="w" show-icon style="margin-bottom: 4px" />
         </div>
 
-        <a-table
-          :columns="previewColumns"
-          :data-source="previewData.employees || []"
-          :row-key="(r) => r.employment_id"
-          :pagination="{ pageSize: 10, size: 'small' }"
-          size="small"
-          :scroll="{ x: 1420, y: 420 }"
-          :expanded-row-keys="expandedRows"
-          @expand="onExpandRow"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'employee'">
-              <div><strong>{{ record.name }}</strong></div>
-              <span class="cell-sub">{{ record.staff_id }}</span>
-            </template>
-            <template v-else-if="column.key === 'employee_status'">
-              <a-tag :color="statusColorMap[record.employee_status] || 'default'" size="small">{{ record.employee_status || '—' }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'org'">
-              <a-tag :color="record.organization === 'SMRU' ? 'blue' : 'green'" size="small">{{ record.organization }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'start_date'">
-              {{ fmtDate(record.start_date) }}
-            </template>
-            <template v-else-if="column.key === 'pass_probation_date'">
-              {{ fmtDate(record.pass_probation_date) }}
-            </template>
-            <template v-else-if="column.key === 'probation_salary'">
-              <span class="font-mono">{{ fmtCurrency(record.probation_salary) }}</span>
-            </template>
-            <template v-else-if="column.key === 'pass_probation_salary'">
-              <span class="font-mono">{{ fmtCurrency(record.pass_probation_salary) }}</span>
-            </template>
-            <template v-else-if="column.key === 'allocations'">
-              <a-tag size="small">{{ record.allocations?.length || 0 }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'gross'">
-              <span class="font-mono">{{ fmtCurrency(getEmployeeTotal(record, 'gross_salary_by_fte')) }}</span>
-            </template>
-            <template v-else-if="column.key === 'tax'">
-              <span class="font-mono">{{ fmtCurrency(getEmployeeDeduction(record, 'tax')) }}</span>
-            </template>
-            <template v-else-if="column.key === 'net'">
-              <span class="font-mono font-semibold">{{ fmtCurrency(getEmployeeTotal(record, 'net_salary')) }}</span>
-            </template>
-          </template>
+        <div class="preview-toolbar">
+          <a-input
+            v-model:value="previewSearch"
+            placeholder="Filter by name or staff ID..."
+            allow-clear
+            style="width: 240px"
+            size="small"
+          >
+            <template #prefix><SearchOutlined style="color: var(--color-text-muted)" /></template>
+          </a-input>
+          <a-button size="small" @click="toggleExpandAll">
+            {{ expandedRows.length === filteredPreviewEmployees.length ? 'Collapse All' : 'Expand All' }}
+          </a-button>
+        </div>
 
-          <template #expandedRowRender="{ record }">
-            <div class="alloc-expand">
-              <div v-for="alloc in (record.allocations || [])" :key="alloc.allocation_id" class="alloc-detail-card">
-                <div class="alloc-detail-header">
-                  <div class="alloc-detail-grant">
-                    <span class="alloc-grant-name">{{ alloc.grant_name }}</span>
-                    <span class="alloc-grant-code font-mono">{{ alloc.grant_code }}</span>
-                  </div>
-                  <div class="alloc-detail-tags">
-                    <a-tag color="processing" size="small">FTE: {{ (alloc.fte * 100).toFixed(0) }}%</a-tag>
-                    <a-tag v-if="alloc.needs_advance" color="orange" size="small">Advance Needed</a-tag>
-                  </div>
-                </div>
-                <div class="alloc-detail-body">
-                  <div class="alloc-detail-col">
-                    <div class="alloc-detail-col-title">Income</div>
-                    <div class="alloc-row"><span>Gross Salary</span><span class="font-mono">{{ fmtCurrency(alloc.gross_salary) }}</span></div>
-                    <div v-if="getAnnualIncrease(alloc)" class="alloc-row alloc-row-increase">
-                      <span>
-                        Annual Increase
-                        <a-tooltip :title="`Full increase ${fmtCurrency(getAnnualIncreaseFull(alloc))} × ${(alloc.calculation_breakdown?.step_1_salary_determination?.fte * 100).toFixed(0)}% FTE = ${fmtCurrency(getAnnualIncrease(alloc))}`">
-                          <InfoCircleOutlined style="font-size: 11px; color: #999; margin-left: 4px" />
-                        </a-tooltip>
-                      </span>
-                      <span class="font-mono" style="color: #389e0d">+{{ fmtCurrency(getAnnualIncrease(alloc)) }}</span>
-                    </div>
-                    <div class="alloc-row"><span>Salary by FTE</span><span class="font-mono">{{ fmtCurrency(alloc.gross_salary_by_fte) }}</span></div>
-                    <div v-if="alloc.income_additions?.retroactive_salary" class="alloc-row"><span>Retroactive Sal.</span><span class="font-mono">{{ fmtCurrency(alloc.income_additions.retroactive_salary) }}</span></div>
-                    <div v-if="alloc.income_additions?.thirteen_month" class="alloc-row"><span>13th Month</span><span class="font-mono">{{ fmtCurrency(alloc.income_additions.thirteen_month) }}</span></div>
-                    <div v-if="alloc.income_additions?.salary_bonus" class="alloc-row"><span>Salary Bonus</span><span class="font-mono">{{ fmtCurrency(alloc.income_additions.salary_bonus) }}</span></div>
-                    <div class="alloc-row alloc-row-total"><span>Total Income</span><span class="font-mono">{{ fmtCurrency(alloc.total_income) }}</span></div>
-                  </div>
-                  <div class="alloc-detail-col">
-                    <div class="alloc-detail-col-title">Deductions</div>
-                    <div class="alloc-row"><span>PVD</span><span class="font-mono">{{ fmtCurrency(alloc.deductions?.pvd) }}</span></div>
-                    <div v-if="alloc.deductions?.saving_fund" class="alloc-row"><span>Saving Fund</span><span class="font-mono">{{ fmtCurrency(alloc.deductions.saving_fund) }}</span></div>
-                    <div class="alloc-row"><span>Social Security</span><span class="font-mono">{{ fmtCurrency(alloc.deductions?.employee_ss) }}</span></div>
-                    <div class="alloc-row"><span>Health Welfare</span><span class="font-mono">{{ fmtCurrency(alloc.deductions?.employee_hw) }}</span></div>
-                    <div class="alloc-row"><span>Income Tax</span><span class="font-mono">{{ fmtCurrency(alloc.deductions?.tax) }}</span></div>
-                    <div v-if="alloc.deductions?.study_loan" class="alloc-row"><span>Study Loan</span><span class="font-mono">{{ fmtCurrency(alloc.deductions.study_loan) }}</span></div>
-                    <div class="alloc-row alloc-row-total"><span>Total Deductions</span><span class="font-mono">{{ fmtCurrency(alloc.deductions?.total) }}</span></div>
-                  </div>
-                  <div class="alloc-detail-col">
-                    <div class="alloc-detail-col-title">Employer Contributions</div>
-                    <div class="alloc-row"><span>PVD (Employer)</span><span class="font-mono">{{ fmtCurrency(alloc.contributions?.pvd_employer) }}</span></div>
-                    <div v-if="alloc.contributions?.saving_fund_employer" class="alloc-row"><span>Saving Fund (Employer)</span><span class="font-mono">{{ fmtCurrency(alloc.contributions.saving_fund_employer) }}</span></div>
-                    <div class="alloc-row"><span>Social Security</span><span class="font-mono">{{ fmtCurrency(alloc.contributions?.employer_ss) }}</span></div>
-                    <div class="alloc-row"><span>Health Welfare</span><span class="font-mono">{{ fmtCurrency(alloc.contributions?.employer_hw) }}</span></div>
-                    <div class="alloc-row alloc-row-total"><span>Total Employer</span><span class="font-mono">{{ fmtCurrency(alloc.contributions?.total) }}</span></div>
-                  </div>
-                </div>
-                <div class="alloc-detail-footer">
-                  <span class="cell-sub">
-                    Total PVD: {{ fmtCurrency(alloc.total_pvd) }}
-                    <template v-if="alloc.total_saving_fund">&middot; Total Saving Fund: {{ fmtCurrency(alloc.total_saving_fund) }}</template>
-                  </span>
-                  <div style="display: flex; gap: 8px; margin-top: 6px">
-                    <div class="alloc-net-box" style="flex: 1">
-                      <span>Net Salary</span>
-                      <span class="font-mono font-semibold">{{ fmtCurrency(alloc.net_salary) }}</span>
-                    </div>
-                    <div class="alloc-net-box" style="flex: 1; background: #f0faf0">
-                      <span>Total Cost</span>
-                      <span class="font-mono font-semibold">{{ fmtCurrency(alloc.total_salary) }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </a-table>
+        <div class="preview-table-scroll">
+          <a-table
+            :columns="previewColumns"
+            :data-source="filteredPreviewEmployees"
+            :row-key="(r) => r.employment_id"
+            :pagination="{ pageSize: 15, size: 'small', showSizeChanger: true, pageSizeOptions: ['15', '30', '50'] }"
+            size="small"
+            :expanded-row-keys="expandedRows"
+            @expand="onExpandRow"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'org'">
+                <a-tag :color="getOrgColor(record.organization)" size="small">{{ record.organization }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'employee'">
+                <div><strong>{{ record.name }}</strong></div>
+                <span class="cell-sub font-mono">{{ record.staff_id }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="statusColorMap[record.employee_status] || 'default'" size="small">{{ record.employee_status || '—' }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'records'">
+                <a-tag size="small">{{ record.allocations?.length || 0 }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'total_net'">
+                <span class="font-mono font-semibold">{{ formatCurrency(getEmployeeTotal(record, 'net_salary')) }}</span>
+              </template>
+            </template>
+
+            <template #expandedRowRender="{ record }">
+              <a-table
+                :columns="allocColumns"
+                :data-source="record.allocations || []"
+                :row-key="(r) => r.allocation_id"
+                :pagination="false"
+                size="small"
+                class="alloc-sub-table"
+              >
+                <template #bodyCell="{ column, record: alloc }">
+                  <template v-if="column.key === 'grant_code'">
+                    <span class="font-mono">{{ alloc.grant_code }}</span>
+                  </template>
+                  <template v-else-if="column.key === 'grant_name'">
+                    {{ alloc.grant_name }}
+                  </template>
+                  <template v-else-if="column.key === 'fte'">
+                    {{ (alloc.fte * 100).toFixed(0) }}%
+                  </template>
+                  <template v-else-if="column.key === 'flags'">
+                    <a-tag v-if="alloc.needs_advance" color="orange" size="small">Advance</a-tag>
+                  </template>
+                  <template v-else>
+                    <span class="font-mono">{{ formatCurrency(getAllocValue(alloc, column.key)) }}</span>
+                  </template>
+                </template>
+              </a-table>
+            </template>
+          </a-table>
+        </div>
       </template>
     </div>
 
@@ -244,14 +199,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, inject, onUnmounted } from 'vue'
+import { ref, reactive, computed, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { InfoCircleOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined } from '@ant-design/icons-vue'
 import { payrollApi } from '@/api'
 import { getEcho, initEcho } from '@/plugins/echo'
-
-const dayjs = inject('$dayjs')
-function fmtDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { formatCurrency } from '@/utils/formatters'
 
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open', 'completed'])
@@ -273,6 +227,7 @@ const wizardForm = reactive({
 
 const previewLoading = ref(false)
 const previewData = ref(null)
+const previewSearch = ref('')
 const expandedRows = ref([])
 const processing = ref(false)
 
@@ -295,19 +250,58 @@ const statusColorMap = {
 }
 
 const previewColumns = [
-  { title: 'Employee', key: 'employee', width: 180, fixed: 'left' },
-  { title: 'Status', key: 'employee_status', width: 140 },
   { title: 'Org', key: 'org', width: 70, align: 'center' },
-  { title: 'Department', dataIndex: 'department', width: 140 },
-  { title: 'Start Date', key: 'start_date', width: 120 },
-  { title: 'Pass Prob. Date', key: 'pass_probation_date', width: 120 },
-  { title: 'Prob. Salary', key: 'probation_salary', width: 130, align: 'right' },
-  { title: 'Pass Prob. Salary', key: 'pass_probation_salary', width: 120, align: 'right' },
-  { title: 'Alloc.', key: 'allocations', width: 60, align: 'center' },
-  { title: 'Gross', key: 'gross', width: 120, align: 'right' },
-  { title: 'Tax', key: 'tax', width: 100, align: 'right' },
-  { title: 'Net', key: 'net', width: 120, align: 'right' },
+  { title: 'Employee', key: 'employee', width: 180 },
+  { title: 'Department', dataIndex: 'department', width: 140, ellipsis: true },
+  { title: 'Position', dataIndex: 'position', width: 140, ellipsis: true },
+  { title: 'Site', dataIndex: 'site', width: 100, ellipsis: true },
+  { title: 'Status', key: 'status', width: 140 },
+  { title: 'Records', key: 'records', width: 70, align: 'center' },
+  { title: 'Total Net', key: 'total_net', width: 120, align: 'right' },
 ]
+
+// Inner table: full spreadsheet layout with all monetary columns
+const allocColumns = [
+  // Grant info
+  { title: 'Grant Code', key: 'grant_code', width: 100 },
+  { title: 'Grant Name', key: 'grant_name', width: 160, ellipsis: true },
+  { title: 'FTE', key: 'fte', width: 55, align: 'center' },
+  // Income
+  { title: 'Gross Salary', key: 'gross_salary', width: 105, align: 'right' },
+  { title: 'Gross by FTE', key: 'gross_salary_by_fte', width: 105, align: 'right' },
+  { title: 'Sal. Increase', key: 'salary_increase', width: 100, align: 'right' },
+  { title: 'Retroactive', key: 'retroactive_salary', width: 95, align: 'right' },
+  { title: '13th Month', key: 'thirteen_month', width: 95, align: 'right' },
+  { title: 'Bonus', key: 'salary_bonus', width: 85, align: 'right' },
+  { title: 'Total Income', key: 'total_income', width: 100, align: 'right' },
+  // Deductions
+  { title: 'PVD', key: 'pvd', width: 85, align: 'right' },
+  { title: 'PVD Employer', key: 'pvd_employer', width: 100, align: 'right' },
+  { title: 'Saving Fund', key: 'saving_fund', width: 95, align: 'right' },
+  { title: 'SF Employer', key: 'saving_fund_employer', width: 95, align: 'right' },
+  { title: 'Emp. SSF', key: 'employee_ss', width: 85, align: 'right' },
+  { title: 'Empr. SSF', key: 'employer_ss', width: 85, align: 'right' },
+  { title: 'Emp. H/W', key: 'employee_hw', width: 85, align: 'right' },
+  { title: 'Empr. H/W', key: 'employer_hw', width: 85, align: 'right' },
+  { title: 'Tax', key: 'tax', width: 85, align: 'right' },
+  { title: 'Study Loan', key: 'study_loan', width: 90, align: 'right' },
+  // Totals
+  { title: 'Total Deduction', key: 'total_deduction', width: 110, align: 'right' },
+  { title: 'Employer Contrib.', key: 'employer_total', width: 115, align: 'right' },
+  { title: 'Total Salary', key: 'total_salary', width: 105, align: 'right' },
+  { title: 'Net Salary', key: 'net_salary', width: 105, align: 'right' },
+  { title: '', key: 'flags', width: 70 },
+]
+
+const filteredPreviewEmployees = computed(() => {
+  const employees = previewData.value?.employees || []
+  if (!previewSearch.value) return employees
+  const q = previewSearch.value.toLowerCase()
+  return employees.filter(e =>
+    (e.name || '').toLowerCase().includes(q) ||
+    (e.staff_id || '').toLowerCase().includes(q)
+  )
+})
 
 async function handlePreview() {
   previewLoading.value = true
@@ -322,8 +316,7 @@ async function handlePreview() {
     }
     const { data } = await payrollApi.bulkPreview(payload)
     previewData.value = data.data
-    // Auto-expand all employee rows to show allocation details
-    expandedRows.value = (data.data?.employees || []).map(e => e.employment_id)
+    expandedRows.value = []
   } catch (err) {
     message.error(err.response?.data?.message || 'Failed to generate preview')
     currentStep.value = 1
@@ -463,6 +456,7 @@ function resetWizard() {
   cleanupTracking()
   currentStep.value = 0
   previewData.value = null
+  previewSearch.value = ''
   expandedRows.value = []
   processProgress.value = 0
   processStatus.value = 'active'
@@ -482,26 +476,45 @@ function onExpandRow(expanded, record) {
   }
 }
 
+function toggleExpandAll() {
+  const employees = filteredPreviewEmployees.value
+  if (expandedRows.value.length === employees.length) {
+    expandedRows.value = []
+  } else {
+    expandedRows.value = employees.map(e => e.employment_id)
+  }
+}
+
 function getEmployeeTotal(record, field) {
   return (record.allocations || []).reduce((sum, a) => sum + (Number(a[field]) || 0), 0)
 }
 
-function getEmployeeDeduction(record, field) {
-  return (record.allocations || []).reduce((sum, a) => sum + (Number(a.deductions?.[field]) || 0), 0)
-}
-
-function getAnnualIncrease(alloc) {
-  return Number(alloc.calculation_breakdown?.step_1_salary_determination?.annual_increase_by_fte) || 0
-}
-
-function getAnnualIncreaseFull(alloc) {
-  return Number(alloc.calculation_breakdown?.step_1_salary_determination?.annual_increase_full) || 0
-}
-
-function fmtCurrency(val) {
-  if (val == null || val === '') return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// Maps inner-table column keys to their data paths in the allocation object
+function getAllocValue(alloc, key) {
+  const map = {
+    gross_salary: alloc.gross_salary,
+    gross_salary_by_fte: alloc.gross_salary_by_fte,
+    salary_increase: alloc.calculation_breakdown?.step_1_salary_determination?.annual_increase_by_fte,
+    retroactive_salary: alloc.income_additions?.retroactive_salary,
+    thirteen_month: alloc.income_additions?.thirteen_month,
+    salary_bonus: alloc.income_additions?.salary_bonus,
+    total_income: alloc.total_income,
+    pvd: alloc.deductions?.pvd,
+    pvd_employer: alloc.contributions?.pvd_employer,
+    saving_fund: alloc.deductions?.saving_fund,
+    saving_fund_employer: alloc.contributions?.saving_fund_employer,
+    employee_ss: alloc.deductions?.employee_ss,
+    employer_ss: alloc.contributions?.employer_ss,
+    employee_hw: alloc.deductions?.employee_hw,
+    employer_hw: alloc.contributions?.employer_hw,
+    tax: alloc.deductions?.tax,
+    study_loan: alloc.deductions?.study_loan,
+    total_deduction: alloc.deductions?.total,
+    employer_total: alloc.contributions?.total,
+    total_salary: alloc.total_salary,
+    net_salary: alloc.net_salary,
+  }
+  return map[key] ?? null
 }
 
 onUnmounted(() => cleanupTracking())
@@ -532,27 +545,31 @@ onUnmounted(() => cleanupTracking())
 .processing-current { font-size: 13px; color: var(--color-text-muted); }
 .processing-stats { display: flex; gap: 8px; margin-top: 4px; }
 
-/* Allocation expanded row styles */
-.alloc-expand { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
-.alloc-detail-card { border: 1px solid #e8e8e8; border-radius: 8px; background: #fafbfc; overflow: hidden; }
-.alloc-detail-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f5f7fa; border-bottom: 1px solid #e8e8e8; }
-.alloc-detail-grant { display: flex; flex-direction: column; gap: 2px; }
-.alloc-grant-name { font-weight: 600; font-size: 13px; }
-.alloc-grant-code { font-size: 11px; color: var(--color-text-muted); }
-.alloc-detail-tags { display: flex; gap: 6px; align-items: center; }
-.alloc-detail-body { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 12px 14px; }
-@media (min-width: 768px) { .alloc-detail-body { grid-template-columns: 1fr 1fr 1fr; gap: 0; } }
-.alloc-detail-col { padding: 0 10px; }
-.alloc-detail-col:first-child { padding-left: 0; }
-.alloc-detail-col:last-child { padding-right: 0; }
-.alloc-detail-col:not(:last-child) { border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
-@media (min-width: 768px) { .alloc-detail-col:not(:last-child) { border-bottom: none; padding-bottom: 0; border-right: 1px solid #f0f0f0; } }
-.alloc-detail-col-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #f0f0f0; }
-.alloc-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #f8f8f8; }
-.alloc-row span:first-child { color: var(--color-text-secondary); }
-.alloc-row-increase { background: #f6ffed; border-radius: 3px; padding: 3px 4px; margin: 1px -4px; }
-.alloc-row-total { border-top: 1px solid #e8e8e8; border-bottom: none; padding-top: 6px; margin-top: 4px; font-weight: 600; }
-.alloc-row-total span:first-child { color: var(--color-text); }
-.alloc-detail-footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-top: 1px solid #e8e8e8; }
-.alloc-net-box { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: #f0f7ff; border-radius: 6px; font-size: 13px; }
+/* Preview toolbar */
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Outer scroll wrapper — the inner 25-column table pushes the
+   outer table wider than the viewport. Wrapping the entire outer
+   table in overflow-x: auto gives a single horizontal scrollbar.
+   A div inside a <td> cannot independently scroll because table
+   layout expands the td to fit content before overflow applies. */
+.preview-table-scroll {
+  overflow-x: auto;
+}
+.alloc-sub-table :deep(.ant-table-thead > tr > th) {
+  font-size: 11px;
+  padding: 5px 6px;
+  background: #f5f7fa;
+  white-space: nowrap;
+}
+.alloc-sub-table :deep(.ant-table-tbody > tr > td) {
+  font-size: 12px;
+  padding: 6px;
+  white-space: nowrap;
+}
 </style>

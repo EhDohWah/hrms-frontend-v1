@@ -11,6 +11,7 @@ export const uploadApi = {
     formData.append('file', file)
     return client.post(`/uploads/${module}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2 min — sync imports can take longer than the 30s default
     })
   },
 

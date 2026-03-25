@@ -2,7 +2,7 @@
   <div class="info-field">
     <dt class="info-label">{{ label }}</dt>
     <dd class="info-value" :class="{ 'font-mono': mono }">
-      {{ value || '—' }}
+      <slot name="value">{{ value ?? '—' }}</slot>
     </dd>
   </div>
 </template>
@@ -18,20 +18,31 @@ defineProps({
 <style scoped>
 .info-field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: stretch;
+  min-height: 36px;
 }
 .info-label {
-  font-size: 12px;
+  flex: 0 0 clamp(100px, 38%, 200px);
+  background: var(--color-bg-subtle, #f8f9fa);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 11.5px;
   font-weight: 500;
-  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  padding: 7px 10px;
+  border-right: 1.5px solid var(--color-border, #e5e7eb);
+  display: flex;
+  align-items: center;
 }
 .info-value {
-  font-size: 14px;
+  flex: 1;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-text, #1f272e);
+  font-size: 13px;
   font-weight: 500;
-  color: var(--color-text);
+  padding: 7px 10px;
   margin: 0;
+  display: flex;
+  align-items: center;
 }
 </style>

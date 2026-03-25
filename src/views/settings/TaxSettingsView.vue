@@ -171,6 +171,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { taxSettingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatCurrency } from '@/utils/formatters'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -225,7 +226,7 @@ function typeColor(type) {
 function formatValue(record) {
   if (record.setting_type === 'RATE') return `${record.setting_value}%`
   const n = Number(record.setting_value)
-  return isNaN(n) ? String(record.setting_value) : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return isNaN(n) ? String(record.setting_value) : formatCurrency(n)
 }
 
 async function fetchItems() {

@@ -21,8 +21,8 @@
                   <img :src="bhfLogo" alt="BHF" />
                 </div>
                 <div class="org-slot-text">
-                  <span class="org-slot-abbr">BHF</span>
-                  <span class="org-slot-full">Borderland Health Foundation</span>
+                  <span class="org-slot-abbr">{{ ORGANIZATIONS.BHF.code }}</span>
+                  <span class="org-slot-full">{{ ORGANIZATIONS.BHF.fullName }}</span>
                 </div>
               </div>
 
@@ -33,8 +33,8 @@
                   <img :src="smruLogo" alt="SMRU" />
                 </div>
                 <div class="org-slot-text">
-                  <span class="org-slot-abbr">SMRU</span>
-                  <span class="org-slot-full">Shoklo Malaria Research Unit</span>
+                  <span class="org-slot-abbr">{{ ORGANIZATIONS.SMRU.code }}</span>
+                  <span class="org-slot-full">{{ ORGANIZATIONS.SMRU.fullName }}</span>
                 </div>
               </div>
             </div>
@@ -49,6 +49,18 @@
               <h2 class="login-title">Sign in</h2>
               <p class="login-subtitle">Enter your credentials to access the system</p>
             </div>
+
+            <a-alert
+              v-if="sessionConflict"
+              type="warning"
+              show-icon
+              closable
+              @close="sessionConflict = false"
+              style="margin-bottom: 20px"
+            >
+              <template #message>Account Active on Another Device</template>
+              <template #description>{{ sessionConflictMessage }}</template>
+            </a-alert>
 
             <a-alert
               v-if="errorMessage"
@@ -116,6 +128,7 @@ import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { MailOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons-vue'
+import { ORGANIZATIONS } from '@/constants/organizations'
 
 import bhfLogo from '@/assets/img/bhf-logo.png'
 import smruLogo from '@/assets/img/smru-logo.jfif'
@@ -127,10 +140,13 @@ const authStore = useAuthStore()
 const form = reactive({ email: '', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
+const sessionConflict = ref(false)
+const sessionConflictMessage = ref('')
 
 async function handleLogin() {
   loading.value = true
   errorMessage.value = ''
+  sessionConflict.value = false
   try {
     await authStore.login(form.email, form.password)
     const redirect = route.query.redirect
@@ -141,7 +157,17 @@ async function handleLogin() {
     ) ? redirect : '/'
     router.push(safeRedirect)
   } catch (err) {
-    errorMessage.value = err.response?.data?.message || 'Login failed. Please try again.'
+    const status = err.response?.status
+    const data = err.response?.data
+
+    if (status === 409 && data?.error_type === 'SESSION_CONFLICT') {
+      sessionConflict.value = true
+      sessionConflictMessage.value = data.message
+    } else if (!err.response) {
+      errorMessage.value = 'Unable to connect to the server. Please check your connection and try again.'
+    } else {
+      errorMessage.value = data?.message || 'The username or password you entered is incorrect.'
+    }
   } finally {
     loading.value = false
   }
@@ -175,7 +201,7 @@ async function handleLogin() {
 @media (min-width: 720px) {
   .login-inner {
     flex-direction: row;
-    min-height: 520px;
+    min-height: min(520px, 80vh);
   }
 }
 
@@ -223,13 +249,37 @@ async function handleLogin() {
   letter-spacing: -0.05em;
   line-height: 1;
   margin: 0;
+  width: 4ch;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 3px solid rgba(255, 255, 255, 0.7);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .system-abbr {
+    animation: typing 5s steps(4) infinite, blink 0.6s step-end infinite;
+  }
+}
+
+@keyframes typing {
+  0%, 5% { width: 0; }
+  20%, 65% { width: 4ch; }
+  80%, 100% { width: 0; }
+}
+
+@keyframes blink {
+  50% { border-color: transparent; }
 }
 .system-name {
   font-size: 12px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.5);
   margin-top: 2px;
-  white-space: nowrap;
+}
+@media (min-width: 720px) {
+  .system-name {
+    white-space: nowrap;
+  }
 }
 .system-tagline {
   margin-top: 20px;
@@ -296,7 +346,7 @@ async function handleLogin() {
   font-size: 10.5px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.4;
-  max-width: 130px;
+  max-width: 160px;
 }
 
 /* vertical divider between the two orgs */

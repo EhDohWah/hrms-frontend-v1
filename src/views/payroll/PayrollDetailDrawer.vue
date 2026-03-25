@@ -7,27 +7,27 @@
     :body-style="{ padding: '16px 24px' }"
     @close="$emit('update:open', false)"
   >
-    <template v-if="employment">
-      <!-- Employee Info -->
+    <template v-if="firstPayroll">
+      <!-- Employee Info (from snapshot display object) -->
       <div class="drawer-section">
         <a-descriptions :column="appStore.isMobile ? 1 : 3" size="small" bordered>
           <a-descriptions-item label="Staff ID">
-            <span class="font-mono">{{ employment.employee?.staff_id }}</span>
+            <span class="font-mono">{{ firstPayroll.display?.staff_id }}</span>
           </a-descriptions-item>
           <a-descriptions-item label="Name">
-            {{ employment.employee?.first_name_en }} {{ employment.employee?.last_name_en }}
+            {{ firstPayroll.display?.employee_name }}
           </a-descriptions-item>
           <a-descriptions-item label="Organization">
-            {{ payrolls[0]?.organization || employment?.organization || '—' }}
+            {{ firstPayroll.organization || '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="Department">
-            {{ employment.department?.name }}
+            {{ firstPayroll.display?.department }}
           </a-descriptions-item>
           <a-descriptions-item label="Position">
-            {{ employment.position?.title }}
+            {{ firstPayroll.display?.position }}
           </a-descriptions-item>
           <a-descriptions-item label="Pay Period">
-            {{ formatDate(payrolls[0]?.pay_period_date) }}
+            {{ formatDate(firstPayroll.pay_period_date) }}
           </a-descriptions-item>
         </a-descriptions>
       </div>
@@ -48,30 +48,30 @@
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'grant'">
               <div>
-                {{ record.employee_funding_allocation?.grant_item?.grant?.code || '—' }}
-                <div class="cell-sub">{{ record.employee_funding_allocation?.grant_item?.budgetline_code || '' }}</div>
+                {{ record.display?.grant_code || '—' }}
+                <div class="cell-sub">{{ record.display?.budget_line_code || '' }}</div>
               </div>
             </template>
             <template v-else-if="column.key === 'fte'">
-              {{ fmtFte(record.employee_funding_allocation?.fte) }}
+              {{ fmtFte(record.display?.fte) }}
             </template>
             <template v-else-if="column.key === 'gross'">
-              {{ fmtCurrency(record.gross_salary_by_FTE) }}
+              {{ formatCurrency(record.gross_salary_by_FTE) }}
             </template>
             <template v-else-if="column.key === 'income'">
-              {{ fmtCurrency(record.total_income) }}
+              {{ formatCurrency(record.total_income) }}
             </template>
             <template v-else-if="column.key === 'deduction'">
-              {{ fmtCurrency(record.total_deduction) }}
+              {{ formatCurrency(record.total_deduction) }}
             </template>
             <template v-else-if="column.key === 'employer'">
-              {{ fmtCurrency(record.employer_contribution) }}
+              {{ formatCurrency(record.employer_contribution) }}
             </template>
             <template v-else-if="column.key === 'net'">
-              <strong style="color: var(--color-success)">{{ fmtCurrency(record.net_salary) }}</strong>
+              <strong style="color: var(--color-success)">{{ formatCurrency(record.net_salary) }}</strong>
             </template>
             <template v-else-if="column.key === 'total'">
-              <strong>{{ fmtCurrency(record.total_salary) }}</strong>
+              <strong>{{ formatCurrency(record.total_salary) }}</strong>
             </template>
             <template v-else-if="column.key === 'action'">
               <a
@@ -89,31 +89,33 @@
             <div class="breakdown-grid">
               <div class="breakdown-col">
                 <div class="breakdown-title">Income</div>
-                <div class="breakdown-row"><span>Gross Salary</span><span>{{ fmtCurrency(record.gross_salary) }}</span></div>
-                <div class="breakdown-row"><span>Gross by FTE</span><span>{{ fmtCurrency(record.gross_salary_by_FTE) }}</span></div>
-                <div class="breakdown-row"><span>Retroactive Sal.</span><span>{{ fmtCurrency(record.retroactive_salary) }}</span></div>
-                <div class="breakdown-row"><span>13th Month</span><span>{{ fmtCurrency(record.thirteen_month_salary) }}</span></div>
-                <div class="breakdown-row"><span>13th Month Accrued</span><span>{{ fmtCurrency(record.thirteen_month_salary_accured) }}</span></div>
-                <div class="breakdown-row"><span>Salary Bonus</span><span>{{ fmtCurrency(record.salary_bonus) }}</span></div>
-                <div class="breakdown-row total"><span>Total Income</span><span>{{ fmtCurrency(record.total_income) }}</span></div>
+                <div class="breakdown-row"><span>Gross Salary</span><span>{{ formatCurrency(record.gross_salary) }}</span></div>
+                <div class="breakdown-row"><span>Gross by FTE</span><span>{{ formatCurrency(record.gross_salary_by_FTE) }}</span></div>
+                <div class="breakdown-row"><span>Retroactive Sal.</span><span>{{ formatCurrency(record.retroactive_salary) }}</span></div>
+                <div class="breakdown-row"><span>13th Month</span><span>{{ formatCurrency(record.thirteen_month_salary) }}</span></div>
+                <div class="breakdown-row"><span>13th Month Accrued</span><span>{{ formatCurrency(record.thirteen_month_salary_accured) }}</span></div>
+                <div class="breakdown-row"><span>Salary Increase</span><span>{{ formatCurrency(record.salary_increase) }}</span></div>
+                <div class="breakdown-row total"><span>Total Income</span><span>{{ formatCurrency(record.total_income) }}</span></div>
               </div>
               <div class="breakdown-col">
                 <div class="breakdown-title">Deductions</div>
-                <div class="breakdown-row"><span>PVD</span><span>{{ fmtCurrency(record.pvd) }}</span></div>
-                <div class="breakdown-row"><span>Saving Fund</span><span>{{ fmtCurrency(record.saving_fund) }}</span></div>
-                <div class="breakdown-row"><span>Social Security</span><span>{{ fmtCurrency(record.employee_social_security) }}</span></div>
-                <div class="breakdown-row"><span>Health Welfare</span><span>{{ fmtCurrency(record.employee_health_welfare) }}</span></div>
-                <div class="breakdown-row"><span>Income Tax</span><span>{{ fmtCurrency(record.tax) }}</span></div>
-                <div class="breakdown-row total"><span>Total Deductions</span><span>{{ fmtCurrency(record.total_deduction) }}</span></div>
+                <div class="breakdown-row"><span>PVD</span><span>{{ formatCurrency(record.pvd) }}</span></div>
+                <div class="breakdown-row"><span>Saving Fund</span><span>{{ formatCurrency(record.saving_fund) }}</span></div>
+                <div class="breakdown-row"><span>Social Security</span><span>{{ formatCurrency(record.employee_social_security) }}</span></div>
+                <div class="breakdown-row"><span>Health Welfare</span><span>{{ formatCurrency(record.employee_health_welfare) }}</span></div>
+                <div class="breakdown-row"><span>Income Tax</span><span>{{ formatCurrency(record.tax) }}</span></div>
+                <div class="breakdown-row total"><span>Total Deductions</span><span>{{ formatCurrency(record.total_deduction) }}</span></div>
               </div>
               <div class="breakdown-col">
                 <div class="breakdown-title">Employer</div>
-                <div class="breakdown-row"><span>Social Security</span><span>{{ fmtCurrency(record.employer_social_security) }}</span></div>
-                <div class="breakdown-row"><span>Health Welfare</span><span>{{ fmtCurrency(record.employer_health_welfare) }}</span></div>
-                <div class="breakdown-row total"><span>Total Employer</span><span>{{ fmtCurrency(record.employer_contribution) }}</span></div>
+                <div class="breakdown-row"><span>PVD (Employer)</span><span>{{ formatCurrency(record.pvd_employer) }}</span></div>
+                <div class="breakdown-row"><span>Saving Fund (Employer)</span><span>{{ formatCurrency(record.saving_fund_employer) }}</span></div>
+                <div class="breakdown-row"><span>Social Security</span><span>{{ formatCurrency(record.employer_social_security) }}</span></div>
+                <div class="breakdown-row"><span>Health Welfare</span><span>{{ formatCurrency(record.employer_health_welfare) }}</span></div>
+                <div class="breakdown-row total"><span>Total Employer</span><span>{{ formatCurrency(record.employer_contribution) }}</span></div>
                 <div class="breakdown-title" style="margin-top: 12px">PVD & Saving Fund</div>
-                <div class="breakdown-row"><span>Total PVD</span><span>{{ fmtCurrency(record.total_pvd) }}</span></div>
-                <div class="breakdown-row"><span>Total Saving Fund</span><span>{{ fmtCurrency(record.total_saving_fund) }}</span></div>
+                <div class="breakdown-row"><span>Total PVD</span><span>{{ formatCurrency(record.total_pvd) }}</span></div>
+                <div class="breakdown-row"><span>Total Saving Fund</span><span>{{ formatCurrency(record.total_saving_fund) }}</span></div>
               </div>
             </div>
           </template>
@@ -126,22 +128,22 @@
                   <strong>Total ({{ payrolls.length }} allocations)</strong>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="2" align="right">
-                  <span class="font-mono">{{ fmtCurrency(totals.gross) }}</span>
+                  <span class="font-mono">{{ formatCurrency(totals.gross) }}</span>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="3" align="right">
-                  <span class="font-mono">{{ fmtCurrency(totals.income) }}</span>
+                  <span class="font-mono">{{ formatCurrency(totals.income) }}</span>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="4" align="right">
-                  <span class="font-mono">{{ fmtCurrency(totals.deduction) }}</span>
+                  <span class="font-mono">{{ formatCurrency(totals.deduction) }}</span>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="5" align="right">
-                  <span class="font-mono">{{ fmtCurrency(totals.employer) }}</span>
+                  <span class="font-mono">{{ formatCurrency(totals.employer) }}</span>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="6" align="right">
-                  <strong class="font-mono" style="color: var(--color-success)">{{ fmtCurrency(totals.net) }}</strong>
+                  <strong class="font-mono" style="color: var(--color-success)">{{ formatCurrency(totals.net) }}</strong>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="7" align="right">
-                  <strong class="font-mono">{{ fmtCurrency(totals.total) }}</strong>
+                  <strong class="font-mono">{{ formatCurrency(totals.total) }}</strong>
                 </a-table-summary-cell>
                 <a-table-summary-cell :index="8" />
               </a-table-summary-row>
@@ -162,11 +164,11 @@
 </template>
 
 <script setup>
-import { computed, inject } from 'vue'
+import { computed } from 'vue'
 import { FilePdfOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
+import { formatCurrency, formatDate, fmtFte } from '@/utils/formatters'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 
 const props = defineProps({
@@ -178,7 +180,7 @@ const props = defineProps({
 defineEmits(['update:open', 'download-payslip'])
 
 const payrolls = computed(() => props.employeeGroup?.payrolls || [])
-const employment = computed(() => payrolls.value[0]?.employment || null)
+const firstPayroll = computed(() => payrolls.value[0] || null)
 
 const totals = computed(() => {
   const sum = (field) => payrolls.value.reduce((s, r) => s + (Number(r[field]) || 0), 0)
@@ -208,20 +210,6 @@ const allocColumns = [
   { title: '', key: 'action', width: 40, align: 'center' },
 ]
 
-function fmtCurrency(val) {
-  if (val == null || val === '') return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function fmtFte(val) {
-  if (val == null) return '—'
-  return `${(Number(val) * 100).toFixed(0)}%`
-}
-
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY') : '—'
-}
 </script>
 
 <style scoped>

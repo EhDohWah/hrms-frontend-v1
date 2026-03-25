@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/authApi'
 import { userApi } from '@/api'
+import { resetTourCache } from '@/composables/useTour'
 import router from '@/router'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -248,6 +249,7 @@ export const useAuthStore = defineStore('auth', () => {
     permissions.value = {}
     if (refreshTimer) clearTimeout(refreshTimer)
     refreshTimer = null
+    resetTourCache()
     clearLocalStorage()
   }
 

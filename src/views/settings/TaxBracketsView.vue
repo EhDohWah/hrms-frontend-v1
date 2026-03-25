@@ -60,7 +60,7 @@
             <span class="font-mono font-semibold">{{ record.formatted_rate || `${record.tax_rate}%` }}</span>
           </template>
           <template v-else-if="column.key === 'base_tax'">
-            <span class="font-mono">{{ fmtCurrency(record.base_tax) }}</span>
+            <span class="font-mono">{{ formatCurrency(record.base_tax) }}</span>
           </template>
           <template v-else-if="column.key === 'year'">
             <span class="font-mono">{{ record.effective_year || '—' }}</span>
@@ -158,6 +158,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { taxBracketApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatCurrency } from '@/utils/formatters'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -203,16 +204,10 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50'],
 }))
 
-function fmtCurrency(val) {
-  if (val == null || val === '') return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 function formatRange(record) {
-  const min = fmtCurrency(record.min_income)
+  const min = formatCurrency(record.min_income)
   if (record.max_income == null) return `${min} +`
-  return `${min} — ${fmtCurrency(record.max_income)}`
+  return `${min} — ${formatCurrency(record.max_income)}`
 }
 
 async function fetchItems() {

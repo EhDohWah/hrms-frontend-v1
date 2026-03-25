@@ -137,6 +137,18 @@ export const routes = [
         component: () => import('@/views/training/TrainingListView.vue'),
         meta: { title: 'Training', permission: 'training_list' },
       },
+      {
+        path: 'training/:id',
+        name: 'training-detail',
+        component: () => import('@/views/training/TrainingDetailView.vue'),
+        meta: { title: 'Training Detail', permission: 'training_list' },
+      },
+      {
+        path: 'employee-training',
+        name: 'employee-training',
+        component: () => import('@/views/training/EmployeeTrainingListView.vue'),
+        meta: { title: 'Employee Training', permission: 'employee_training' },
+      },
 
       // ---- Payroll ----
       {
@@ -210,6 +222,12 @@ export const routes = [
         name: 'positions',
         component: () => import('@/views/organization/PositionListView.vue'),
         meta: { title: 'Positions', permission: 'positions' },
+      },
+      {
+        path: 'section-departments',
+        name: 'section-departments',
+        component: () => import('@/views/organization/SectionDepartmentListView.vue'),
+        meta: { title: 'Section Departments', permission: 'section_departments' },
       },
 
       // ---- Settings ----

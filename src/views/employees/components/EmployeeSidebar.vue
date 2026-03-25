@@ -27,10 +27,10 @@
         <span class="meta-label">Staff ID</span>
         <span class="meta-value font-mono">{{ form.staff_id }}</span>
       </div>
-      <div v-if="employee?.employment?.organization" class="sidebar-meta-item">
+      <div v-if="employee?.organization" class="sidebar-meta-item">
         <span class="meta-label">Organization</span>
-        <a-tag :color="employee.employment.organization === 'SMRU' ? 'blue' : 'green'" size="small">
-          {{ employee.employment.organization }}
+        <a-tag :color="getOrgColor(employee.organization)" size="small">
+          {{ employee.organization }}
         </a-tag>
       </div>
       <div v-if="form.status" class="sidebar-meta-item">
@@ -58,6 +58,7 @@
 <script setup>
 import { computed, inject } from 'vue'
 import { CameraOutlined } from '@ant-design/icons-vue'
+import { getOrgColor } from '@/constants/organizations'
 
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
 const dayjs = inject('$dayjs')

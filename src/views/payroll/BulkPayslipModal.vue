@@ -12,8 +12,7 @@
     <a-form layout="vertical" style="margin-top: 8px">
       <a-form-item label="Organisation" required>
         <a-radio-group v-model:value="form.organization" button-style="solid" size="large">
-          <a-radio-button value="SMRU">SMRU</a-radio-button>
-          <a-radio-button value="BHF">BHF</a-radio-button>
+          <a-radio-button v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-radio-button>
         </a-radio-group>
       </a-form-item>
 
@@ -56,6 +55,8 @@ import { ref, reactive, computed, inject } from 'vue'
 import { message } from 'ant-design-vue'
 import { FilePdfOutlined } from '@ant-design/icons-vue'
 import { payrollApi } from '@/api'
+import { ORG_OPTIONS } from '@/constants/organizations'
+import { parseBlobError } from '@/utils/helpers'
 
 const dayjs = inject('$dayjs')
 const today = dayjs()
@@ -87,18 +88,7 @@ async function generate() {
     emit('update:open', false)
     resetForm()
   } catch (err) {
-    // The response body is a Blob (due to responseType: 'blob') — parse it to get the error message
-    if (err.response?.data instanceof Blob) {
-      try {
-        const text = await err.response.data.text()
-        const json = JSON.parse(text)
-        message.error(json?.message || 'No payslips found for this period')
-      } catch {
-        message.error('No payslips found for this period')
-      }
-    } else {
-      message.error(err.response?.data?.message || 'Failed to generate payslips')
-    }
+    message.error(await parseBlobError(err) || 'No payslips found for this period')
   } finally {
     downloading.value = false
   }

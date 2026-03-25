@@ -2,7 +2,6 @@ import axios from 'axios'
 import router from '@/router'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
-const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
 
 const client = axios.create({
   baseURL: API_BASE,
@@ -13,12 +12,7 @@ const client = axios.create({
 
 // No request interceptor needed — cookies are sent automatically via withCredentials
 
-// ---- CSRF cookie initialization ----
-export async function initCsrf() {
-  await axios.get(`${PUBLIC_URL}/sanctum/csrf-cookie`, { withCredentials: true })
-}
-
-// ---- Response interceptor: handle 401, 419, 403 ----
+// ---- Response interceptor: handle 401, 403 ----
 let isRefreshing = false
 let failedQueue = []
 const MAX_QUEUE_SIZE = 10
@@ -84,11 +78,9 @@ client.interceptors.response.use(
       }
     }
 
-    // --- 419: CSRF token mismatch ---
-    if (status === 419 && !originalRequest._csrfRetry) {
-      originalRequest._csrfRetry = true
-      await initCsrf() // Re-fetch CSRF cookie
-      return client(originalRequest) // Retry original request
+    // --- 409: Session conflict (let LoginView handle it) ---
+    if (status === 409 && errorData?.error_type === 'SESSION_CONFLICT') {
+      return Promise.reject(error)
     }
 
     // --- 403: Permission denied ---

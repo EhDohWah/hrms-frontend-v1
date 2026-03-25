@@ -1,5 +1,18 @@
 <template>
   <div class="page-container">
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+      <div class="stat-card" v-for="stat in quickStats" :key="stat.label">
+        <div :class="['stat-icon', stat.theme]">
+          <component :is="stat.icon" />
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stat.value }}</span>
+          <span class="stat-label">{{ stat.label }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Page header -->
     <div class="page-header">
       <div>
@@ -28,8 +41,7 @@
           style="width: 140px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="SMRU">SMRU</a-select-option>
-          <a-select-option value="BHF">BHF</a-select-option>
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
         </a-select>
         <a-select
           v-model:value="filters.status"
@@ -39,9 +51,7 @@
           style="width: 160px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="Local ID Staff">Local ID Staff</a-select-option>
-          <a-select-option value="Local non ID Staff">Local non ID Staff</a-select-option>
-          <a-select-option value="Expats (Local)">Expats (Local)</a-select-option>
+          <a-select-option v-for="s in EMPLOYEE_STATUSES" :key="s.value" :value="s.value">{{ s.value }}</a-select-option>
         </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canEdit('employees')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
@@ -67,22 +77,45 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'name'">
-            <router-link :to="{ name: 'employee-detail', params: { id: record.id } }" class="employee-name-cell">
-              <a-avatar :size="32" :style="{ backgroundColor: getAvatarColor(record.staff_id), fontSize: '12px', fontWeight: 600 }">
-                {{ getInitials(record) }}
-              </a-avatar>
-              <div>
-                <div class="cell-name">{{ record.first_name_en }} {{ record.last_name_en }}</div>
-                <div class="cell-staff-id font-mono">{{ record.staff_id }}</div>
-              </div>
+          <template v-if="column.key === 'organization'">
+            <a-tag :color="getOrgColor(record.organization)" size="small">
+              {{ record.organization || '—' }}
+            </a-tag>
+          </template>
+
+          <template v-else-if="column.key === 'staff_id'">
+            <router-link :to="{ name: 'employee-detail', params: { id: record.id } }" class="cell-link font-mono">
+              {{ record.staff_id || '—' }}
             </router-link>
           </template>
 
-          <template v-else-if="column.key === 'organization'">
-            <a-tag :color="(record.organization || record.employment?.organization) === 'SMRU' ? 'blue' : 'green'" size="small">
-              {{ record.organization || record.employment?.organization || '—' }}
-            </a-tag>
+          <template v-else-if="column.key === 'initial'">
+            {{ record.initial_en || '—' }}
+          </template>
+
+          <template v-else-if="column.key === 'first_name'">
+            <router-link :to="{ name: 'employee-detail', params: { id: record.id } }" class="employee-name-cell">
+              <a-avatar :size="28" :style="{ backgroundColor: getAvatarColor(record.staff_id), fontSize: '11px', fontWeight: 600 }">
+                {{ getInitials(record) }}
+              </a-avatar>
+              <span class="cell-name">{{ record.first_name_en || '—' }}</span>
+            </router-link>
+          </template>
+
+          <template v-else-if="column.key === 'last_name'">
+            <span class="cell-name">{{ record.last_name_en || '—' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'gender'">
+            {{ genderLabel(record.gender) }}
+          </template>
+
+          <template v-else-if="column.key === 'dob'">
+            {{ formatDate(record.date_of_birth) }}
+          </template>
+
+          <template v-else-if="column.key === 'age'">
+            {{ calcAge(record.date_of_birth) }}
           </template>
 
           <template v-else-if="column.key === 'department'">
@@ -94,16 +127,29 @@
           </template>
 
           <template v-else-if="column.key === 'status'">
-            <a-tag
-              :color="statusColorMap[record.status] || 'default'"
-              size="small"
-            >
+            <a-tag :color="STATUS_COLOR_MAP[record.status] || 'default'" size="small">
               {{ record.status || '—' }}
             </a-tag>
           </template>
 
-          <template v-else-if="column.key === 'gender'">
-            {{ genderLabel(record.gender) }}
+          <template v-else-if="column.key === 'id_type'">
+            {{ record.identification_type || '—' }}
+          </template>
+
+          <template v-else-if="column.key === 'id_number'">
+            <span class="font-mono">{{ record.identification_number || '—' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'ssn'">
+            <span class="font-mono">{{ record.social_security_number || '—' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'tax_no'">
+            <span class="font-mono">{{ record.tax_number || '—' }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'mobile'">
+            <span class="font-mono">{{ record.mobile_phone || '—' }}</span>
           </template>
 
           <template v-else-if="column.key === 'actions'">
@@ -127,11 +173,12 @@
               {{ getInitials(record) }}
             </a-avatar>
             <div class="mobile-card-body">
-              <div class="cell-name">{{ record.first_name_en }} {{ record.last_name_en }}</div>
+              <div class="cell-name">{{ record.initial_en ? record.initial_en + ' ' : '' }}{{ record.first_name_en }} {{ record.last_name_en }}</div>
               <div class="cell-staff-id font-mono">{{ record.staff_id }}</div>
+              <div class="mobile-card-meta">{{ record.employment?.department?.name || '—' }} · {{ record.employment?.position?.title || '—' }}</div>
               <div class="mobile-card-tags">
-                <a-tag :color="(record.organization || record.employment?.organization) === 'SMRU' ? 'blue' : 'green'" size="small">{{ record.organization || record.employment?.organization || '—' }}</a-tag>
-                <a-tag :color="statusColorMap[record.status] || 'default'" size="small">{{ record.status || '—' }}</a-tag>
+                <a-tag :color="getOrgColor(record.organization)" size="small">{{ record.organization || '—' }}</a-tag>
+                <a-tag :color="STATUS_COLOR_MAP[record.status] || 'default'" size="small">{{ record.status || '—' }}</a-tag>
               </div>
             </div>
           </router-link>
@@ -144,8 +191,8 @@
             size="small"
             show-size-changer
             :page-size-options="['10', '20', '50', '100']"
-            @change="(page, pageSize) => { pagination.current_page = page; pagination.per_page = pageSize; fetchEmployees() }"
-            @showSizeChange="(current, size) => { pagination.current_page = 1; pagination.per_page = size; fetchEmployees() }"
+            @change="handleMobilePageChange"
+            @showSizeChange="handleMobilePageSizeChange"
           />
         </div>
       </a-spin>
@@ -154,14 +201,20 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { formatDate, genderLabel, calcAge } from '@/utils/formatters'
+import { ORGANIZATIONS, ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { EMPLOYEE_STATUSES, STATUS_COLOR_MAP } from '@/constants/employeeStatuses'
+import {
+  SearchOutlined, PlusOutlined, ExclamationCircleOutlined,
+  TeamOutlined, LogoutOutlined, UserAddOutlined,
+} from '@ant-design/icons-vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -176,30 +229,50 @@ const filters = reactive({ organization: undefined, status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0, last_page: 1 })
 const selectedRowKeys = ref([])
 
-const statusColorMap = {
-  'Local ID Staff': 'green',
-  'Local non ID Staff': 'green',
-  'Expats (Local)': 'purple',
-}
+const quickStats = computed(() => {
+  const s = statistics.value
+  const org = s?.organizationCount || {}
+  return [
+    { label: `${ORGANIZATIONS.SMRU.label} Employees`, value: org.SMRU_count ?? '—', icon: markRaw(TeamOutlined), theme: 'stat-info' },
+    { label: `${ORGANIZATIONS.BHF.label} Employees`, value: org.BHF_count ?? '—', icon: markRaw(TeamOutlined), theme: 'stat-success' },
+    { label: 'New Joiners', value: s?.newJoinerCount ?? '—', icon: markRaw(UserAddOutlined), theme: 'stat-warning' },
+    { label: 'Resigned', value: s?.resignedCount ?? '—', icon: markRaw(LogoutOutlined), theme: 'stat-danger' },
+  ]
+})
 
 const sortField = ref(null)
 const sortOrder = ref(null)
 
 const sortFieldMap = {
-  name: 'first_name_en',
   organization: 'organization',
+  staff_id: 'staff_id',
+  first_name: 'first_name_en',
+  last_name: 'last_name_en',
   gender: 'gender',
+  dob: 'date_of_birth',
+  age: 'age',
   status: 'status',
+  id_type: 'identification_type',
 }
 
 const columns = computed(() => [
-  { title: 'Employee', key: 'name', width: 260, sorter: true, sortOrder: sortField.value === 'first_name_en' ? sortOrder.value : null },
-  { title: 'Organization', key: 'organization', width: 110, align: 'center', sorter: true, sortOrder: sortField.value === 'organization' ? sortOrder.value : null },
-  { title: 'Gender', key: 'gender', width: 90, sorter: true, sortOrder: sortField.value === 'gender' ? sortOrder.value : null },
-  { title: 'Department', key: 'department', width: 180 },
-  { title: 'Position', key: 'position', width: 180 },
+  { title: 'Organization', key: 'organization', width: 120, fixed: 'left', sorter: true, sortOrder: sortField.value === 'organization' ? sortOrder.value : null },
+  { title: 'Staff ID', key: 'staff_id', width: 110, fixed: 'left', sorter: true, sortOrder: sortField.value === 'staff_id' ? sortOrder.value : null },
+  { title: 'Initial', key: 'initial', width: 65, align: 'center' },
+  { title: 'First Name', key: 'first_name', width: 160, sorter: true, sortOrder: sortField.value === 'first_name' ? sortOrder.value : null },
+  { title: 'Last Name', key: 'last_name', width: 140, sorter: true, sortOrder: sortField.value === 'last_name' ? sortOrder.value : null },
+  { title: 'Gender', key: 'gender', width: 75, align: 'center', sorter: true, sortOrder: sortField.value === 'gender' ? sortOrder.value : null },
+  { title: 'DoB', key: 'dob', width: 115, sorter: true, sortOrder: sortField.value === 'dob' ? sortOrder.value : null },
+  { title: 'Age', key: 'age', width: 60, align: 'center', sorter: true, sortOrder: sortField.value === 'age' ? sortOrder.value : null },
+  { title: 'Department', key: 'department', width: 160, ellipsis: true },
+  { title: 'Position', key: 'position', width: 160, ellipsis: true },
   { title: 'Status', key: 'status', width: 140, sorter: true, sortOrder: sortField.value === 'status' ? sortOrder.value : null },
-  { title: '', key: 'actions', width: 90, align: 'right' },
+  { title: 'ID Type', key: 'id_type', width: 130, sorter: true, sortOrder: sortField.value === 'id_type' ? sortOrder.value : null },
+  { title: 'ID Number', key: 'id_number', width: 140 },
+  { title: 'SSN', key: 'ssn', width: 140 },
+  { title: 'Tax No.', key: 'tax_no', width: 120 },
+  { title: 'Mobile', key: 'mobile', width: 130 },
+  { title: '', key: 'actions', width: 80, align: 'right', fixed: 'right' },
 ])
 
 const tablePagination = computed(() => ({
@@ -211,20 +284,15 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50', '100'],
 }))
 
-function genderLabel(val) {
-  if (val === 'M') return 'Male'
-  if (val === 'F') return 'Female'
-  return val || '—'
-}
-
 function getInitials(record) {
   return `${(record.first_name_en || '')[0] || ''}${(record.last_name_en || '')[0] || ''}`.toUpperCase()
 }
 
+const AVATAR_COLORS = ['#1677ff', '#52c41a', '#722ed1', '#eb2f96', '#fa8c16', '#13c2c2']
+
 function getAvatarColor(staffId) {
-  const colors = ['#1677ff', '#52c41a', '#722ed1', '#eb2f96', '#fa8c16', '#13c2c2']
   const hash = (staffId || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  return colors[hash % colors.length]
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
 async function fetchEmployees() {
@@ -236,7 +304,7 @@ async function fetchEmployees() {
       ...(search.value && { search: search.value }),
       ...(filters.organization && { filter_organization: filters.organization }),
       ...(filters.status && { filter_status: filters.status }),
-      ...(sortField.value && { sort_by: sortField.value }),
+      ...(sortField.value && { sort_by: sortFieldMap[sortField.value] || sortField.value }),
       ...(sortOrder.value && { sort_order: sortOrder.value === 'ascend' ? 'asc' : 'desc' }),
     }
     const { data } = await employeeApi.list(params, { signal: getSignal() })
@@ -257,13 +325,25 @@ function handleTableChange(pag, _filters, sorter) {
   pagination.per_page = pag.pageSize
 
   if (sorter && sorter.columnKey) {
-    sortField.value = sortFieldMap[sorter.columnKey] || null
+    sortField.value = sorter.columnKey
     sortOrder.value = sorter.order || null
   } else {
     sortField.value = null
     sortOrder.value = null
   }
 
+  fetchEmployees()
+}
+
+function handleMobilePageChange(page, pageSize) {
+  pagination.current_page = page
+  pagination.per_page = pageSize
+  fetchEmployees()
+}
+
+function handleMobilePageSizeChange(_current, size) {
+  pagination.current_page = 1
+  pagination.per_page = size
   fetchEmployees()
 }
 
@@ -340,14 +420,22 @@ onMounted(() => {
 .employee-name-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   color: inherit;
 }
 .cell-name {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--color-text);
+}
+.cell-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.cell-link:hover {
+  text-decoration: underline;
 }
 .cell-staff-id {
   font-size: 12px;
@@ -377,6 +465,11 @@ onMounted(() => {
 .mobile-card-body {
   flex: 1;
   min-width: 0;
+}
+.mobile-card-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
 }
 .mobile-card-tags {
   margin-top: 4px;

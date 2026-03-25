@@ -22,8 +22,7 @@
           style="width: 130px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="SMRU">SMRU</a-select-option>
-          <a-select-option value="BHF">BHF</a-select-option>
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
         </a-select>
         <a-date-picker
           v-model:value="filters.payPeriod"
@@ -36,6 +35,23 @@
           style="width: 150px"
           @change="onSearchOrFilterChange"
         />
+        <a-select
+          v-model:value="filters.fundType"
+          placeholder="Fund Type"
+          allow-clear
+          class="filter-input"
+          style="width: 160px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option value="pvd">
+            <SafetyCertificateOutlined /> PVD
+            <a-badge v-if="fundSummary.pvd_count != null" :count="fundSummary.pvd_count" :overflow-count="9999" :number-style="{ backgroundColor: '#1890ff', fontSize: '11px', marginLeft: '6px' }" />
+          </a-select-option>
+          <a-select-option value="saving_fund">
+            <BankOutlined /> Saving Fund
+            <a-badge v-if="fundSummary.saving_fund_count != null" :count="fundSummary.saving_fund_count" :overflow-count="9999" :number-style="{ backgroundColor: '#52c41a', fontSize: '11px', marginLeft: '6px' }" />
+          </a-select-option>
+        </a-select>
         <a-radio-group v-model:value="viewMode" size="small" button-style="solid">
           <a-radio-button value="standard">Standard</a-radio-button>
           <a-radio-button value="budget">Budget History</a-radio-button>
@@ -59,7 +75,7 @@
     <div v-if="viewMode === 'standard'" class="payroll-table-card">
       <a-table
         :columns="columns"
-        :data-source="groupedData"
+        :data-source="paginatedGroups"
         :loading="loading"
         :pagination="false"
         :row-key="(r) => r.employeeKey"
@@ -68,25 +84,28 @@
         class="payroll-nested-table"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'employee'">
+          <template v-if="column.key === 'org'">
+            <a-tag :color="getOrgColor(record.organization)" size="small">
+              {{ record.organization }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'employee'">
             <div>
               <strong>{{ record.name }}</strong>
               <div class="cell-sub">{{ record.staff_id }}</div>
             </div>
           </template>
-          <template v-else-if="column.key === 'org'">
-            <a-tag :color="record.organization === 'SMRU' ? 'blue' : 'green'" size="small">
-              {{ record.organization }}
-            </a-tag>
+          <template v-else-if="column.key === 'status'">
+            {{ record.employee_status }}
+          </template>
+          <template v-else-if="column.key === 'pay_period'">
+            {{ formatDate(record.pay_period_date) }}
           </template>
           <template v-else-if="column.key === 'records'">
             {{ record.payrolls.length }}
           </template>
-          <template v-else-if="column.key === 'gross'">
-            {{ fmtCurrency(record.totalGross) }}
-          </template>
           <template v-else-if="column.key === 'net'">
-            <strong>{{ fmtCurrency(record.totalNet) }}</strong>
+            <strong>{{ formatCurrency(record.totalNet) }}</strong>
           </template>
         </template>
 
@@ -96,36 +115,30 @@
             :data-source="record.payrolls"
             :row-key="(r) => r.id"
             :pagination="false"
+            :scroll="{ x: 'max-content' }"
+            size="small"
+            class="payroll-inner-table"
           >
-            <template #bodyCell="{ column, record: pr }">
-              <template v-if="column.key === 'pay_date'">
-                {{ formatDate(pr.pay_period_date) }}
+            <template #bodyCell="{ column, record: pr, text }">
+              <template v-if="column.key === 'grant_code'">
+                {{ pr.display?.grant_code || '—' }}
               </template>
-              <template v-else-if="column.key === 'grant'">
-                <div>
-                  {{ pr.employee_funding_allocation?.grant_item?.grant?.code || '—' }}
-                  <div class="cell-sub">{{ pr.employee_funding_allocation?.grant_item?.budgetline_code || '' }}</div>
-                </div>
+              <template v-else-if="column.key === 'grant_name'">
+                {{ pr.display?.grant_name || '—' }}
+              </template>
+              <template v-else-if="column.key === 'bl_code'">
+                {{ pr.display?.budget_line_code || '—' }}
               </template>
               <template v-else-if="column.key === 'fte'">
-                {{ fmtFte(pr.employee_funding_allocation?.fte) }}
-              </template>
-              <template v-else-if="column.key === 'inner_gross'">
-                {{ fmtCurrency(pr.gross_salary_by_FTE) }}
-              </template>
-              <template v-else-if="column.key === 'total_income'">
-                {{ fmtCurrency(pr.total_income) }}
-              </template>
-              <template v-else-if="column.key === 'deductions'">
-                {{ fmtCurrency(pr.total_deduction) }}
+                {{ fmtFte(pr.display?.fte) }}
               </template>
               <template v-else-if="column.key === 'net_salary'">
-                <strong style="color: var(--color-success)">{{ fmtCurrency(pr.net_salary) }}</strong>
+                <strong style="color: var(--color-success)">{{ formatCurrency(text) }}</strong>
               </template>
-              <template v-else-if="column.key === 'total_cost'">
-                {{ fmtCurrency(pr.total_salary) }}
+              <template v-else-if="column.key === 'notes'">
+                {{ pr.notes || '—' }}
               </template>
-              <template v-else-if="column.key === 'operation'">
+              <template v-else-if="column.key === 'action'">
                 <span class="table-operation">
                   <a @click="openDetail(record)">View</a>
                   <a @click="downloadPayslip(pr.id)">
@@ -134,6 +147,10 @@
                   </a>
                   <a v-if="canDelete" style="color: #ff4d4f" @click="handleDelete(pr)">Delete</a>
                 </span>
+              </template>
+              <!-- All monetary columns with dataIndex render as currency -->
+              <template v-else-if="column.dataIndex">
+                {{ formatCurrency(text) }}
               </template>
             </template>
           </a-table>
@@ -149,17 +166,17 @@
         </template>
       </a-table>
 
-      <div v-if="pagination.total > 0" class="table-footer">
+      <div v-if="groupedData.length > 0" class="table-footer">
         <a-pagination
-          v-model:current="pagination.current_page"
-          v-model:pageSize="pagination.per_page"
-          :total="pagination.total"
+          v-model:current="page"
+          v-model:pageSize="perPage"
+          :total="groupedData.length"
           :show-size-changer="true"
-          :show-total="(total) => `${total} records`"
+          :show-total="(total) => `${total} employees`"
           :page-size-options="['20', '50', '100']"
           size="small"
-          @change="fetchItems"
-          @showSizeChange="fetchItems"
+          @change="onPageChange"
+          @showSizeChange="onPageChange"
         />
       </div>
     </div>
@@ -220,11 +237,14 @@ import { ref, reactive, computed, watch, onMounted, inject, createVNode } from '
 import { Modal, message } from 'ant-design-vue'
 import {
   SearchOutlined, ThunderboltOutlined, FilePdfOutlined, ExclamationCircleOutlined, LoadingOutlined,
+  DollarOutlined, SafetyCertificateOutlined, BankOutlined,
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { payrollApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { formatCurrency, formatDate, fmtFte } from '@/utils/formatters'
 import PayrollBudgetView from './PayrollBudgetView.vue'
 import PayrollDetailDrawer from './PayrollDetailDrawer.vue'
 import BulkPayrollModal from './BulkPayrollModal.vue'
@@ -240,24 +260,45 @@ const canDelete = computed(() => authStore.canDelete('employee_salary'))
 
 // ═══════════════════════════ Table Columns ═══════════════════════════
 const columns = [
-  { title: 'Employee', key: 'employee' },
-  { title: 'Org', key: 'org', align: 'center' },
-  { title: 'Department', dataIndex: 'department', key: 'department' },
-  { title: 'Records', key: 'records', align: 'center' },
-  { title: 'Total Gross', key: 'gross', align: 'right' },
-  { title: 'Total Net', key: 'net', align: 'right' },
+  { title: 'Organization', key: 'org', align: 'center', width: 100 },
+  { title: 'Employee', key: 'employee', width: 180 },
+  { title: 'Department', dataIndex: 'department', key: 'department', width: 150, ellipsis: true },
+  { title: 'Position', dataIndex: 'position', key: 'position', width: 150, ellipsis: true },
+  { title: 'Site', dataIndex: 'site', key: 'site', width: 100, ellipsis: true },
+  { title: 'Status', key: 'status', width: 90 },
+  { title: 'Pay Period', key: 'pay_period', width: 100 },
+  { title: 'Records', key: 'records', align: 'center', width: 70 },
+  { title: 'Total Net', key: 'net', align: 'right', width: 120 },
 ]
 
 const innerColumns = [
-  { title: 'Pay Date', key: 'pay_date' },
-  { title: 'Grant / BL', key: 'grant' },
-  { title: 'FTE', key: 'fte', align: 'center' },
-  { title: 'Gross (FTE)', key: 'inner_gross', align: 'right' },
-  { title: 'Total Income', key: 'total_income', align: 'right' },
-  { title: 'Deductions', key: 'deductions', align: 'right' },
-  { title: 'Net Salary', key: 'net_salary', align: 'right' },
-  { title: 'Total Cost', key: 'total_cost', align: 'right' },
-  { title: 'Action', key: 'operation' },
+  { title: 'Grant Code', key: 'grant_code', fixed: 'left', width: 100 },
+  { title: 'Grant Name', key: 'grant_name', width: 150, ellipsis: true },
+  { title: 'BL Code', key: 'bl_code', width: 90 },
+  { title: 'FTE', key: 'fte', width: 55, align: 'center' },
+  { title: 'Gross Salary', dataIndex: 'gross_salary', key: 'gross_salary', width: 110, align: 'right' },
+  { title: 'Gross by FTE', dataIndex: 'gross_salary_by_FTE', key: 'gross_by_fte', width: 110, align: 'right' },
+  { title: 'Retroactive', dataIndex: 'retroactive_salary', key: 'retroactive', width: 100, align: 'right' },
+  { title: '13th Month', dataIndex: 'thirteen_month_salary', key: 'thirteen_month', width: 100, align: 'right' },
+  { title: '13th Accrue', dataIndex: 'thirteen_month_salary_accured', key: 'thirteen_accrue', width: 100, align: 'right' },
+  { title: 'Sal. Increase', dataIndex: 'salary_increase', key: 'sal_increase', width: 100, align: 'right' },
+  { title: 'PVD', dataIndex: 'pvd', key: 'pvd', width: 85, align: 'right' },
+  { title: 'PVD Employer', dataIndex: 'pvd_employer', key: 'pvd_employer', width: 105, align: 'right' },
+  { title: 'Saving Fund', dataIndex: 'saving_fund', key: 'saving_fund', width: 100, align: 'right' },
+  { title: 'SF Employer', dataIndex: 'saving_fund_employer', key: 'sf_employer', width: 100, align: 'right' },
+  { title: 'Emp. SSF', dataIndex: 'employee_social_security', key: 'emp_ssf', width: 90, align: 'right' },
+  { title: 'Empr. SSF', dataIndex: 'employer_social_security', key: 'empr_ssf', width: 90, align: 'right' },
+  { title: 'Emp. H/W', dataIndex: 'employee_health_welfare', key: 'emp_hw', width: 90, align: 'right' },
+  { title: 'Empr. H/W', dataIndex: 'employer_health_welfare', key: 'empr_hw', width: 90, align: 'right' },
+  { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 85, align: 'right' },
+  { title: 'Study Loan', dataIndex: 'study_loan', key: 'study_loan', width: 95, align: 'right' },
+  { title: 'Total Salary', dataIndex: 'total_salary', key: 'total_salary', width: 110, align: 'right' },
+  { title: 'Total Income', dataIndex: 'total_income', key: 'total_income', width: 110, align: 'right' },
+  { title: 'Empr. Contrib.', dataIndex: 'employer_contribution', key: 'empr_contrib', width: 110, align: 'right' },
+  { title: 'Total Deduction', dataIndex: 'total_deduction', key: 'total_deduction', width: 115, align: 'right' },
+  { title: 'Net Salary', dataIndex: 'net_salary', key: 'net_salary', width: 110, align: 'right' },
+  { title: 'Notes', key: 'notes', width: 120, ellipsis: true },
+  { title: 'Action', key: 'action', fixed: 'right', width: 150 },
 ]
 
 // ═══════════════════════════ View Mode ═══════════════════════════
@@ -268,8 +309,10 @@ const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
 const search = ref('')
-const filters = reactive({ organization: undefined, payPeriod: null })
-const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
+const filters = reactive({ organization: undefined, payPeriod: null, fundType: undefined })
+const fundSummary = reactive({ pvd_count: null, saving_fund_count: null })
+const page = ref(1)
+const perPage = ref(20)
 
 // Map selected employee keys to their actual payroll record IDs
 const selectedPayrollIds = computed(() => {
@@ -284,7 +327,7 @@ function onSelectionChange(keys) {
 }
 
 function onSearchOrFilterChange() {
-  pagination.current_page = 1
+  page.value = 1
   fetchItems()
 }
 
@@ -292,10 +335,11 @@ async function fetchItems() {
   loading.value = true
   try {
     const params = {
-      page: pagination.current_page,
-      per_page: pagination.per_page,
+      page: 1,
+      per_page: 10000,
       ...(search.value && { search: search.value }),
       ...(filters.organization && { filter_organization: filters.organization }),
+      ...(filters.fundType && { filter_fund_type: filters.fundType }),
     }
     if (filters.payPeriod) {
       const start = dayjs(filters.payPeriod).startOf('month').format('YYYY-MM-DD')
@@ -304,36 +348,51 @@ async function fetchItems() {
     }
     const { data } = await payrollApi.list(params, { signal: getSignal() })
     items.value = data.data || []
-    if (data.pagination) Object.assign(pagination, data.pagination)
+    if (data.fund_summary) Object.assign(fundSummary, data.fund_summary)
   } catch (err) { if (err.name !== 'CanceledError') message.error('Failed to load payroll records') }
   loading.value = false
 }
 
-// ═══════════════════════════ Group by Employee ═══════════════════════════
+// ═══════════════════════════ Group by Employee + Pay Period ═══════════════════════════
 const groupedData = computed(() => {
   const map = new Map()
   for (const pr of items.value) {
-    const emp = pr.employment?.employee
-    const key = pr.employment_id || pr.id
+    const empId = pr.employee_id || pr.employment_id || pr.id
+    const month = pr.pay_period_date ? pr.pay_period_date.substring(0, 7) : 'unknown'
+    const key = `${empId}-${month}`
     if (!map.has(key)) {
       map.set(key, {
         employeeKey: `emp-${key}`,
-        name: emp ? `${emp.first_name_en} ${emp.last_name_en}` : '—',
-        staff_id: emp?.staff_id || '—',
-        organization: pr.organization || pr.employment?.organization || '—',
-        department: pr.employment?.department?.name || '—',
+        name: pr.display?.employee_name || '—',
+        staff_id: pr.display?.staff_id || '—',
+        organization: pr.organization || '—',
+        department: pr.display?.department || '—',
+        position: pr.display?.position || '—',
+        site: pr.display?.site || '—',
+        employee_status: pr.display?.employee_status || '—',
+        pay_period_date: pr.pay_period_date,
         payrolls: [],
-        totalGross: 0,
         totalNet: 0,
       })
     }
     const group = map.get(key)
     group.payrolls.push(pr)
-    group.totalGross += Number(pr.gross_salary_by_FTE) || 0
     group.totalNet += Number(pr.net_salary) || 0
   }
   return Array.from(map.values())
 })
+
+// Client-side pagination on grouped rows
+const paginatedGroups = computed(() => {
+  const start = (page.value - 1) * perPage.value
+  return groupedData.value.slice(start, start + perPage.value)
+})
+
+function onPageChange(newPage, newPerPage) {
+  page.value = newPage
+  perPage.value = newPerPage
+  selectedRowKeys.value = []
+}
 
 // ═══════════════════════════ Budget History ═══════════════════════════
 const budgetData = ref([])
@@ -405,8 +464,7 @@ async function downloadPayslip(id) {
 
 // ═══════════════════════════ Delete ═══════════════════════════
 function handleDelete(record) {
-  const emp = record.employment?.employee
-  const name = emp ? `${emp.first_name_en} ${emp.last_name_en}` : `#${record.id}`
+  const name = record.display?.employee_name || `#${record.id}`
   Modal.confirm({
     title: 'Delete Payroll',
     content: `Delete payroll for ${name} (${formatDate(record.pay_period_date)})?`,
@@ -456,22 +514,6 @@ function onCreated() {
   if (viewMode.value === 'budget') fetchBudgetHistory()
 }
 
-// ═══════════════════════════ Helpers ═══════════════════════════
-function fmtCurrency(val) {
-  if (val == null || val === '') return '—'
-  const n = Number(val)
-  return isNaN(n) ? '—' : `฿${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function fmtFte(val) {
-  if (val == null) return '—'
-  return `${(Number(val) * 100).toFixed(0)}%`
-}
-
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY') : '—'
-}
-
 onMounted(() => {
   appStore.setPageMeta('Payroll')
   fetchItems()
@@ -517,6 +559,12 @@ onMounted(() => {
 /* Table helpers */
 .cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .table-operation a { margin-right: 8px; }
+
+/* Compact nested table */
+.payroll-nested-table :deep(.ant-table-thead > tr > th) { font-size: 11px; white-space: nowrap; }
+.payroll-nested-table :deep(.ant-table-tbody > tr > td) { font-size: 12px; }
+.payroll-inner-table :deep(.ant-table-thead > tr > th) { font-size: 11px; white-space: nowrap; }
+.payroll-inner-table :deep(.ant-table-tbody > tr > td) { font-size: 12px; font-family: 'SF Mono', 'Consolas', monospace; }
 
 /* Empty state */
 .empty-state {

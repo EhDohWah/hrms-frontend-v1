@@ -21,14 +21,15 @@
           placeholder="Status"
           allow-clear
           class="filter-input"
-          style="width: 140px"
+          style="width: 160px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="draft">Draft</a-select-option>
-          <a-select-option value="sent">Sent</a-select-option>
-          <a-select-option value="accepted">Accepted</a-select-option>
-          <a-select-option value="rejected">Rejected</a-select-option>
-          <a-select-option value="expired">Expired</a-select-option>
+          <a-select-option value="Pending">Pending</a-select-option>
+          <a-select-option value="Accepted">Accepted</a-select-option>
+          <a-select-option value="Declined">Declined</a-select-option>
+          <a-select-option value="Expired">Expired</a-select-option>
+          <a-select-option value="Withdrawn">Withdrawn</a-select-option>
+          <a-select-option value="Under Review">Under Review</a-select-option>
         </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('job_offers')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
@@ -53,28 +54,30 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'candidate'">
-            <div class="cell-employee">
-              <span class="cell-name">{{ record.candidate_name }}</span>
-              <span class="cell-sub">{{ record.candidate_email }}</span>
-            </div>
+            <span class="cell-name">{{ record.candidate_name }}</span>
           </template>
-          <template v-else-if="column.key === 'position'">
-            {{ record.position?.title || record.position_title || '—' }}
+          <template v-else-if="column.key === 'position_name'">
+            {{ record.position_name || '—' }}
           </template>
-          <template v-else-if="column.key === 'salary'">
-            {{ record.salary ? `฿${Number(record.salary).toLocaleString()}` : '—' }}
+          <template v-else-if="column.key === 'probation_salary'">
+            {{ formatCurrency(record.probation_salary) }}
           </template>
-          <template v-else-if="column.key === 'offer_date'">
-            {{ formatDate(record.offer_date) }}
+          <template v-else-if="column.key === 'date'">
+            {{ formatDate(record.date) }}
           </template>
-          <template v-else-if="column.key === 'expiry_date'">
-            {{ formatDate(record.expiry_date) }}
+          <template v-else-if="column.key === 'acceptance_deadline'">
+            {{ formatDate(record.acceptance_deadline) }}
           </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
+          <template v-else-if="column.key === 'acceptance_status'">
+            <a-tag :color="statusColor(record.acceptance_status)" size="small">{{ record.acceptance_status || '—' }}</a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
+              <a-tooltip title="Download PDF">
+                <a-button size="small" type="link" :loading="downloadingId === record.id" @click="handleDownloadPdf(record)">
+                  <template #icon><FilePdfOutlined /></template>
+                </a-button>
+              </a-tooltip>
               <a-button v-if="authStore.canUpdate('job_offers')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('job_offers')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -99,51 +102,47 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="Candidate Email">
-              <a-input v-model:value="form.candidate_email" placeholder="email@example.com" />
+            <a-form-item label="Position Name" required>
+              <a-input v-model:value="form.position_name" placeholder="e.g. Software Engineer" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="Position">
-          <a-select v-model:value="form.position_id" placeholder="Select position" allow-clear show-search option-filter-prop="label">
-            <a-select-option v-for="p in positionOptions" :key="p.id" :value="p.id" :label="p.title">{{ p.title }}</a-select-option>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Probation Salary" required>
+              <a-input-number v-model:value="form.probation_salary" placeholder="0.00" style="width: 100%" :min="0" :precision="2" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Post-Probation Salary" required>
+              <a-input-number v-model:value="form.pass_probation_salary" placeholder="0.00" style="width: 100%" :min="0" :precision="2" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Offer Date" required>
+              <a-date-picker v-model:value="form.date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Acceptance Deadline" required>
+              <a-date-picker v-model:value="form.acceptance_deadline" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Acceptance Status" required>
+          <a-select v-model:value="form.acceptance_status" placeholder="Select status">
+            <a-select-option value="Pending">Pending</a-select-option>
+            <a-select-option value="Accepted">Accepted</a-select-option>
+            <a-select-option value="Declined">Declined</a-select-option>
+            <a-select-option value="Expired">Expired</a-select-option>
+            <a-select-option value="Withdrawn">Withdrawn</a-select-option>
+            <a-select-option value="Under Review">Under Review</a-select-option>
           </a-select>
         </a-form-item>
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Salary">
-              <a-input-number v-model:value="form.salary" placeholder="0.00" style="width: 100%" :min="0" :precision="2" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Status">
-              <a-select v-model:value="form.status" placeholder="Select status">
-                <a-select-option value="draft">Draft</a-select-option>
-                <a-select-option value="sent">Sent</a-select-option>
-                <a-select-option value="accepted">Accepted</a-select-option>
-                <a-select-option value="rejected">Rejected</a-select-option>
-                <a-select-option value="expired">Expired</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Offer Date">
-              <a-date-picker v-model:value="form.offer_date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Expiry Date">
-              <a-date-picker v-model:value="form.expiry_date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-form-item label="Start Date">
-          <a-date-picker v-model:value="form.start_date" style="width: 100%" format="DD MMM YYYY" value-format="YYYY-MM-DD" />
-        </a-form-item>
-        <a-form-item label="Notes">
-          <a-textarea v-model:value="form.notes" placeholder="Enter additional notes" :rows="3" />
+        <a-form-item label="Note" required>
+          <a-textarea v-model:value="form.note" placeholder="Enter notes" :rows="3" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -151,43 +150,48 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined, FilePdfOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
-import { jobOfferApi, positionApi } from '@/api'
+import { jobOfferApi, reportApi } from '@/api'
+import { formatCurrency, formatDate } from '@/utils/formatters'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
 
 const items = ref([])
-const positionOptions = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
 const filters = reactive({ status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const selectedRowKeys = ref([])
+const downloadingId = ref(null)
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
-  candidate_name: '', candidate_email: '', position_id: undefined,
-  salary: null, status: 'draft', offer_date: null, expiry_date: null,
-  start_date: null, notes: '',
+  candidate_name: '',
+  position_name: '',
+  probation_salary: null,
+  pass_probation_salary: null,
+  date: null,
+  acceptance_deadline: null,
+  acceptance_status: 'Pending',
+  note: '',
 })
 
 const columns = [
   { title: 'Candidate', key: 'candidate', width: 200 },
-  { title: 'Position', key: 'position', width: 180 },
-  { title: 'Salary', key: 'salary', width: 130, align: 'right' },
-  { title: 'Offer Date', key: 'offer_date', width: 130 },
-  { title: 'Expiry', key: 'expiry_date', width: 130 },
-  { title: 'Status', key: 'status', width: 100, align: 'center' },
-  { title: '', key: 'actions', width: 140, align: 'right' },
+  { title: 'Position', key: 'position_name', width: 180 },
+  { title: 'Probation Salary', key: 'probation_salary', width: 150, align: 'right' },
+  { title: 'Date', key: 'date', width: 130 },
+  { title: 'Deadline', key: 'acceptance_deadline', width: 130 },
+  { title: 'Status', key: 'acceptance_status', width: 120, align: 'center' },
+  { title: '', key: 'actions', width: 180, align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -199,11 +203,16 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50'],
 }))
 
-function formatDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
-
 function statusColor(status) {
-  const map = { draft: 'default', sent: 'blue', accepted: 'green', rejected: 'red', expired: 'orange' }
-  return map[status?.toLowerCase()] || 'default'
+  const map = {
+    Pending: 'blue',
+    Accepted: 'green',
+    Declined: 'red',
+    Expired: 'orange',
+    Withdrawn: 'default',
+    'Under Review': 'purple',
+  }
+  return map[status] || 'default'
 }
 
 async function fetchItems() {
@@ -222,13 +231,6 @@ async function fetchItems() {
   loading.value = false
 }
 
-async function fetchPositionOptions() {
-  try {
-    const { data } = await positionApi.options()
-    positionOptions.value = data.data || data || []
-  } catch { /* silent */ }
-}
-
 function onSearchOrFilterChange() {
   pagination.current_page = 1
   fetchItems()
@@ -242,9 +244,14 @@ function handleTableChange(pag) {
 
 function resetForm() {
   Object.assign(form, {
-    candidate_name: '', candidate_email: '', position_id: undefined,
-    salary: null, status: 'draft', offer_date: null, expiry_date: null,
-    start_date: null, notes: '',
+    candidate_name: '',
+    position_name: '',
+    probation_salary: null,
+    pass_probation_salary: null,
+    date: null,
+    acceptance_deadline: null,
+    acceptance_status: 'Pending',
+    note: '',
   })
 }
 
@@ -258,20 +265,27 @@ function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
     candidate_name: record.candidate_name || '',
-    candidate_email: record.candidate_email || '',
-    position_id: record.position_id || undefined,
-    salary: record.salary || null,
-    status: record.status || 'draft',
-    offer_date: record.offer_date || null,
-    expiry_date: record.expiry_date || null,
-    start_date: record.start_date || null,
-    notes: record.notes || '',
+    position_name: record.position_name || '',
+    probation_salary: record.probation_salary || null,
+    pass_probation_salary: record.pass_probation_salary || null,
+    date: record.date || null,
+    acceptance_deadline: record.acceptance_deadline || null,
+    acceptance_status: record.acceptance_status || 'Pending',
+    note: record.note || '',
   })
   modalVisible.value = true
 }
 
 async function handleSave() {
   if (!form.candidate_name) return message.warning('Candidate name is required')
+  if (!form.position_name) return message.warning('Position name is required')
+  if (!form.date) return message.warning('Offer date is required')
+  if (!form.acceptance_deadline) return message.warning('Acceptance deadline is required')
+  if (!form.acceptance_status) return message.warning('Acceptance status is required')
+  if (form.probation_salary == null) return message.warning('Probation salary is required')
+  if (form.pass_probation_salary == null) return message.warning('Post-probation salary is required')
+  if (!form.note) return message.warning('Note is required')
+
   saving.value = true
   try {
     if (editingItem.value) {
@@ -287,6 +301,17 @@ async function handleSave() {
     message.error(err.response?.data?.message || 'Failed to save')
   }
   saving.value = false
+}
+
+async function handleDownloadPdf(record) {
+  downloadingId.value = record.id
+  try {
+    const res = await jobOfferApi.pdf(record.custom_offer_id)
+    reportApi.downloadBlob(res, `job-offer-${record.candidate_name || record.id}.pdf`)
+  } catch {
+    message.error('Failed to download PDF')
+  }
+  downloadingId.value = null
 }
 
 function handleDelete(record) {
@@ -332,7 +357,6 @@ function handleBulkDelete() {
 onMounted(() => {
   appStore.setPageMeta('Job Offers')
   fetchItems()
-  fetchPositionOptions()
 })
 </script>
 
@@ -352,8 +376,6 @@ onMounted(() => {
   }
 }
 .page-header-stats { display: flex; gap: 6px; }
-.cell-employee { display: flex; flex-direction: column; }
 .cell-name { font-weight: 600; font-size: 13.5px; }
-.cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .modal-form { margin-top: 16px; }
 </style>

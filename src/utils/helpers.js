@@ -23,3 +23,21 @@ export function cleanParams(params) {
   })
   return cleaned
 }
+
+/**
+ * Parse error message from a blob response.
+ * Axios returns error body as Blob when responseType is 'blob',
+ * so we need to read and parse it manually.
+ */
+export async function parseBlobError(err) {
+  try {
+    if (err.response?.data instanceof Blob) {
+      const text = await err.response.data.text()
+      const json = JSON.parse(text)
+      return json.message || null
+    }
+    return err.response?.data?.message || null
+  } catch {
+    return null
+  }
+}

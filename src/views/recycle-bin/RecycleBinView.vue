@@ -39,6 +39,14 @@
         >
           <UndoOutlined /> Restore {{ selectedRowKeys.length }} Selected
         </a-button>
+        <a-button
+          v-if="selectedRowKeys.length > 0 && authStore.canDelete('recycle_bin_list')"
+          danger
+          @click="handleBulkDelete"
+          :loading="deleting"
+        >
+          <DeleteOutlined /> Delete {{ selectedRowKeys.length }} Selected
+        </a-button>
       </div>
     </div>
 
@@ -49,7 +57,7 @@
         :data-source="filteredItems"
         :loading="loading"
         :row-key="rowKey"
-        :row-selection="authStore.canUpdate('recycle_bin_list') ? rowSelection : undefined"
+        :row-selection="authStore.canUpdate('recycle_bin_list') || authStore.canDelete('recycle_bin_list') ? rowSelection : undefined"
         :scroll="{ x: 'max-content' }"
         size="middle"
         :pagination="{
@@ -74,7 +82,7 @@
 
           <template v-else-if="column.key === 'deleted_at'">
             <div>
-              <div>{{ formatDate(record.deleted_at) }}</div>
+              <div>{{ formatDateTime(record.deleted_at) }}</div>
               <div class="cell-sub">{{ record.deleted_ago }}</div>
             </div>
           </template>
@@ -96,17 +104,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, createVNode, onMounted } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { SearchOutlined, UndoOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { createVNode } from 'vue'
+import { SearchOutlined, UndoOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { recycleBinApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { formatDateTime } from '@/utils/formatters'
 
 const getSignal = useAbortController()
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
@@ -114,6 +121,7 @@ const items = ref([])
 const stats = ref(null)
 const loading = ref(false)
 const restoring = ref(false)
+const deleting = ref(false)
 const search = ref('')
 const filterModel = ref(undefined)
 const selectedRowKeys = ref([])
@@ -138,10 +146,9 @@ const columns = [
   { title: '', key: 'actions', width: 150, align: 'right' },
 ]
 
-const availableModelTypes = computed(() => {
-  const types = new Set(items.value.map(item => item.model_type))
-  return [...types].sort()
-})
+const availableModelTypes = computed(() =>
+  stats.value ? Object.keys(stats.value.by_model).sort() : []
+)
 
 const filteredItems = computed(() => {
   let result = items.value
@@ -173,8 +180,12 @@ const rowSelection = computed(() => ({
   onChange: (keys) => { selectedRowKeys.value = keys },
 }))
 
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY HH:mm') : '—'
+/** Resolve selected row keys to their source records */
+function resolveSelectedRecords() {
+  const keyToRecord = new Map(items.value.map(item => [rowKey(item), item]))
+  return selectedRowKeys.value
+    .map(key => keyToRecord.get(key))
+    .filter(Boolean)
 }
 
 async function fetchData() {
@@ -245,14 +256,11 @@ function handlePermanentDelete(record) {
 }
 
 function handleBulkRestore() {
-  // Separate soft-delete and legacy items from selection
+  const records = resolveSelectedRecords()
   const softDeleteItems = []
   const legacyItems = []
 
-  for (const key of selectedRowKeys.value) {
-    const record = items.value.find(item => rowKey(item) === key)
-    if (!record) continue
-
+  for (const record of records) {
     if (record.type === 'legacy') {
       legacyItems.push({ deleted_record_id: record.deleted_record_id })
     } else {
@@ -288,6 +296,43 @@ function handleBulkRestore() {
         fetchData()
       }
       restoring.value = false
+    },
+  })
+}
+
+function handleBulkDelete() {
+  const records = resolveSelectedRecords()
+  const deleteItems = records.map(record =>
+    record.type === 'legacy'
+      ? { type: 'legacy', deleted_record_id: record.deleted_record_id }
+      : { type: 'soft_delete', model_type: record.model_type.toLowerCase(), id: record.original_id }
+  )
+
+  Modal.confirm({
+    title: 'Permanently Delete Selected',
+    icon: createVNode(ExclamationCircleOutlined),
+    content: `Are you sure you want to permanently delete ${deleteItems.length} selected record(s)? This action cannot be undone.`,
+    okText: 'Delete Permanently',
+    okType: 'danger',
+    cancelText: 'Cancel',
+    centered: true,
+    async onOk() {
+      deleting.value = true
+      try {
+        const res = await recycleBinApi.bulkPermanentDelete(deleteItems)
+        const { failed } = res.data?.data ?? {}
+        if (failed?.length) {
+          message.warning(res.data?.message || `${failed.length} record(s) failed to delete`)
+        } else {
+          message.success(`${deleteItems.length} record(s) permanently deleted`)
+        }
+        selectedRowKeys.value = []
+        fetchData()
+      } catch (err) {
+        message.error(err.response?.data?.message || 'Some records failed to delete')
+        fetchData()
+      }
+      deleting.value = false
     },
   })
 }

@@ -17,14 +17,15 @@
           <template #prefix><SearchOutlined /></template>
         </a-input>
         <a-select
-          v-model:value="filters.site_id"
-          placeholder="Site"
+          v-model:value="filters.is_active"
+          placeholder="Status"
           allow-clear
           class="filter-input"
-          style="width: 160px"
+          style="width: 140px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option v-for="s in siteOptions" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
+          <a-select-option :value="true">Active</a-select-option>
+          <a-select-option :value="false">Inactive</a-select-option>
         </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('departments')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
@@ -48,15 +49,12 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'site'">
-            {{ record.site?.name || '—' }}
+          <template v-if="column.key === 'description'">
+            {{ record.description || '—' }}
           </template>
-          <template v-else-if="column.key === 'head'">
-            {{ record.head ? `${record.head.first_name_en} ${record.head.last_name_en}` : '—' }}
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="record.status === 'active' ? 'green' : 'red'" size="small">
-              {{ record.status || '—' }}
+          <template v-else-if="column.key === 'is_active'">
+            <a-tag :color="record.is_active ? 'green' : 'red'" size="small">
+              {{ record.is_active ? 'Active' : 'Inactive' }}
             </a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
@@ -80,22 +78,15 @@
         <a-form-item label="Name" required>
           <a-input v-model:value="form.name" placeholder="Enter department name" />
         </a-form-item>
-        <a-form-item label="Code">
-          <a-input v-model:value="form.code" placeholder="Enter department code" />
-        </a-form-item>
-        <a-form-item label="Site">
-          <a-select v-model:value="form.site_id" placeholder="Select site" allow-clear>
-            <a-select-option v-for="s in siteOptions" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
-          </a-select>
-        </a-form-item>
         <a-form-item label="Description">
           <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" />
         </a-form-item>
-        <a-form-item label="Status">
-          <a-select v-model:value="form.status" placeholder="Select status">
-            <a-select-option value="active">Active</a-select-option>
-            <a-select-option value="inactive">Inactive</a-select-option>
-          </a-select>
+        <a-form-item label="Active">
+          <a-switch
+            v-model:checked="form.is_active"
+            checked-children="Active"
+            un-checked-children="Inactive"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -108,7 +99,7 @@ import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
-import { departmentApi, siteApi } from '@/api'
+import { departmentApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
 
 const getSignal = useAbortController()
@@ -117,24 +108,26 @@ const authStore = useAuthStore()
 
 const items = ref([])
 const selectedRowKeys = ref([])
-const siteOptions = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
-const filters = reactive({ site_id: undefined })
+const filters = reactive({ is_active: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const modalVisible = ref(false)
 const editingItem = ref(null)
-const form = reactive({ name: '', code: '', site_id: undefined, description: '', status: 'active' })
+const form = reactive({ name: '', description: '', is_active: true })
 
 const columns = [
-  { title: 'Name', dataIndex: 'name', width: 200 },
-  { title: 'Code', dataIndex: 'code', width: 120 },
-  { title: 'Site', key: 'site', width: 160 },
-  { title: 'Head', key: 'head', width: 200 },
-  { title: 'Status', key: 'status', width: 100, align: 'center' },
+  { title: 'Name', dataIndex: 'name', width: 220, sorter: true },
+  { title: 'Description', key: 'description', ellipsis: true },
+  { title: 'Positions', dataIndex: 'positions_count', width: 100, align: 'center' },
+  { title: 'Active Positions', dataIndex: 'active_positions_count', width: 130, align: 'center' },
+  { title: 'Status', key: 'is_active', width: 100, align: 'center' },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
+
+const sortField = ref(null)
+const sortOrder = ref(null)
 
 const tablePagination = computed(() => ({
   current: pagination.current_page,
@@ -152,7 +145,9 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
-      ...(filters.site_id && { site_id: filters.site_id }),
+      ...(filters.is_active !== undefined && filters.is_active !== null && { is_active: filters.is_active }),
+      ...(sortField.value && { sort_by: sortField.value }),
+      ...(sortOrder.value && { sort_direction: sortOrder.value === 'ascend' ? 'asc' : 'desc' }),
     }
     const { data } = await departmentApi.list(params, { signal: getSignal() })
     items.value = data.data || []
@@ -163,26 +158,29 @@ async function fetchItems() {
   loading.value = false
 }
 
-async function fetchSiteOptions() {
-  try {
-    const { data } = await siteApi.options()
-    siteOptions.value = data.data || data || []
-  } catch { /* silent */ }
-}
-
 function onSearchOrFilterChange() {
   pagination.current_page = 1
   fetchItems()
 }
 
-function handleTableChange(pag) {
+function handleTableChange(pag, _filters, sorter) {
   pagination.current_page = pag.current
   pagination.per_page = pag.pageSize
+
+  if (sorter && sorter.columnKey) {
+    const sortMap = { name: 'name' }
+    sortField.value = sortMap[sorter.columnKey] || null
+    sortOrder.value = sorter.order || null
+  } else {
+    sortField.value = null
+    sortOrder.value = null
+  }
+
   fetchItems()
 }
 
 function resetForm() {
-  Object.assign(form, { name: '', code: '', site_id: undefined, description: '', status: 'active' })
+  Object.assign(form, { name: '', description: '', is_active: true })
 }
 
 function openCreate() {
@@ -195,10 +193,8 @@ function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
     name: record.name || '',
-    code: record.code || '',
-    site_id: record.site_id || undefined,
     description: record.description || '',
-    status: record.status || 'active',
+    is_active: record.is_active !== false,
   })
   modalVisible.value = true
 }
@@ -217,7 +213,13 @@ async function handleSave() {
     modalVisible.value = false
     fetchItems()
   } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
+    const resp = err.response?.data
+    if (resp?.errors) {
+      const firstErr = Object.values(resp.errors)[0]
+      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+    } else {
+      message.error(resp?.message || 'Failed to save')
+    }
   }
   saving.value = false
 }
@@ -230,7 +232,7 @@ function handleDelete(record) {
     onOk: async () => {
       try {
         await departmentApi.destroy(record.id)
-        message.success('Department deleted')
+        message.success('Department moved to recycle bin')
         selectedRowKeys.value = []
         fetchItems()
       } catch (err) {
@@ -265,7 +267,6 @@ function handleBulkDelete() {
 onMounted(() => {
   appStore.setPageMeta('Departments')
   fetchItems()
-  fetchSiteOptions()
 })
 </script>
 

@@ -29,15 +29,13 @@
       </a-input>
 
       <!-- Notifications -->
-      <a-badge :count="notifStore.unreadCount" :offset="[-4, 4]">
-        <div class="header-icon-btn" @click="$router.push({ name: 'notifications' })">
-          <BellOutlined />
-        </div>
-      </a-badge>
+      <div data-tour="notification-bell" style="display: inline-flex">
+        <NotificationDropdown />
+      </div>
 
       <!-- Profile -->
       <a-dropdown :trigger="['click']" placement="bottomRight">
-        <div class="header-profile">
+        <div class="header-profile" data-tour="profile-dropdown">
           <a-avatar
             :size="32"
             :src="profilePictureUrl"
@@ -70,15 +68,14 @@
 import { ref, computed } from 'vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
-import { useNotificationStore } from '@/stores/notifications'
+import NotificationDropdown from './NotificationDropdown.vue'
 import {
-  SearchOutlined, BellOutlined, DownOutlined,
+  SearchOutlined, DownOutlined,
   UserOutlined, LogoutOutlined, MenuOutlined,
 } from '@ant-design/icons-vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
-const notifStore = useNotificationStore()
 
 const searchQuery = ref('')
 
@@ -191,23 +188,6 @@ const profilePictureUrl = computed(() => {
 .search-icon {
   color: var(--color-text-muted);
   font-size: 14px;
-}
-
-.header-icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
-  font-size: 17px;
-}
-.header-icon-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
 }
 
 .header-profile {

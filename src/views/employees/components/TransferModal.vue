@@ -9,7 +9,7 @@
   >
     <a-form :model="form" layout="vertical" class="modal-form">
       <a-form-item label="Current Organization">
-        <a-tag :color="currentOrg === 'BHF' ? 'green' : 'blue'">
+        <a-tag :color="getOrgColor(currentOrg)">
           {{ currentOrg || '—' }}
         </a-tag>
       </a-form-item>
@@ -45,6 +45,7 @@
 import { ref, reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { transferApi } from '@/api'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -61,10 +62,10 @@ const form = reactive({
   reason: '',
 })
 
-const currentOrg = computed(() => props.employee?.employment?.organization)
+const currentOrg = computed(() => props.employee?.organization)
 
 const availableOrgs = computed(() => {
-  return ['SMRU', 'BHF'].filter((o) => o !== currentOrg.value)
+  return ORG_OPTIONS.map(o => o.code).filter((o) => o !== currentOrg.value)
 })
 
 async function handleTransfer() {

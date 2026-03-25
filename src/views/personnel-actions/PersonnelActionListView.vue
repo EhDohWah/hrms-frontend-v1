@@ -5,15 +5,38 @@
         <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
       </div>
       <div class="filter-bar">
+        <a-input
+          v-model:value="search"
+          placeholder="Search personnel actions..."
+          allow-clear
+          class="filter-input"
+          style="width: 220px"
+          @pressEnter="onSearchOrFilterChange"
+          @clear="onSearchOrFilterChange"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
         <a-select
           v-model:value="filters.action_type"
           placeholder="Action Type"
           allow-clear
           class="filter-input"
           style="width: 180px"
-          @change="onFilterChange"
+          @change="onSearchOrFilterChange"
         >
           <a-select-option v-for="(label, key) in constants.action_types" :key="key" :value="key">
+            {{ label }}
+          </a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.status"
+          placeholder="Status"
+          allow-clear
+          class="filter-input"
+          style="width: 160px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="(label, key) in constants.statuses" :key="key" :value="key">
             {{ label }}
           </a-select-option>
         </a-select>
@@ -97,30 +120,31 @@
     <a-modal
       v-model:open="formModalVisible"
       :title="editingItem ? 'Edit Personnel Action' : 'Personnel Action Form'"
-      :footer="null"
+      @ok="handleSave"
+      :confirm-loading="saving"
       :width="'min(95vw, 800px)'"
       destroy-on-close
     >
       <a-form :model="form" layout="vertical" class="modal-form">
-        <!-- Employee Lookup -->
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Staff ID Lookup" required>
-              <a-input-search
-                v-model:value="staffIdSearch"
-                placeholder="Enter Staff ID"
-                @search="lookupStaffId"
-                :loading="lookingUp"
-                :disabled="!!editingItem"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Employee">
-              <a-input :value="employeeLookupName" disabled placeholder="Search by staff ID first" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <!-- Employee Search -->
+        <a-form-item label="Employee" required>
+          <a-select
+            v-model:value="selectedEmployeeId"
+            show-search
+            :filter-option="false"
+            placeholder="Search by name or staff ID..."
+            :disabled="!!editingItem"
+            :loading="employeeSearching || lookingUp"
+            :not-found-content="employeeSearching ? undefined : null"
+            @search="handleEmployeeSearch"
+            @change="handleEmployeeSelect"
+          >
+            <a-select-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id">
+              {{ emp.first_name_en }} {{ emp.last_name_en || '' }}
+              <span class="font-mono" style="color: var(--color-text-muted);">({{ emp.staff_id }})</span>
+            </a-select-option>
+          </a-select>
+        </a-form-item>
 
         <!-- ── Section 1: Current Information ── -->
         <div v-if="currentInfo" class="section-block">
@@ -128,9 +152,11 @@
           <a-descriptions :column="{ xs: 1, sm: 2, md: 3 }" size="small" bordered>
             <a-descriptions-item label="Position">{{ currentInfo.position }}</a-descriptions-item>
             <a-descriptions-item label="Department">{{ currentInfo.department }}</a-descriptions-item>
+            <a-descriptions-item label="Sub-Department">{{ currentInfo.sectionDepartment }}</a-descriptions-item>
             <a-descriptions-item label="Site">{{ currentInfo.site }}</a-descriptions-item>
             <a-descriptions-item label="Salary">{{ currentInfo.salary }}</a-descriptions-item>
-            <a-descriptions-item label="Employment Date">{{ currentInfo.employmentDate }}</a-descriptions-item>
+            <a-descriptions-item label="Probation Salary">{{ currentInfo.probationSalary }}</a-descriptions-item>
+            <a-descriptions-item label="Start Date">{{ currentInfo.employmentDate }}</a-descriptions-item>
           </a-descriptions>
         </div>
 
@@ -223,17 +249,30 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="8">
+              <a-form-item label="Sub-Department">
+                <a-select
+                  v-model:value="form.new_section_department_id"
+                  placeholder="Select sub-department"
+                  allow-clear
+                  show-search
+                  :filter-option="filterOption"
+                >
+                  <a-select-option v-for="sd in filteredSectionDepartments" :key="sd.id" :value="sd.id">{{ sd.name }}</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="8">
               <a-form-item label="Report To">
                 <a-input v-model:value="form.new_report_to" placeholder="Supervisor name" />
               </a-form-item>
             </a-col>
+          </a-row>
+          <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
               <a-form-item label="Pay Plan">
                 <a-input v-model:value="form.new_pay_plan" placeholder="Pay plan" />
               </a-form-item>
             </a-col>
-          </a-row>
-          <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
               <a-form-item label="Phone Ext">
                 <a-input v-model:value="form.new_phone_ext" placeholder="Phone ext" />
@@ -244,10 +283,23 @@
                 <a-input v-model:value="form.new_email" placeholder="Email address" />
               </a-form-item>
             </a-col>
+          </a-row>
+          <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
               <a-form-item label="Salary">
                 <a-input-number
                   v-model:value="form.new_salary"
+                  placeholder="THB"
+                  style="width: 100%"
+                  :min="0"
+                  :precision="2"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="8">
+              <a-form-item label="Probation Salary">
+                <a-input-number
+                  v-model:value="form.new_probation_salary"
                   placeholder="THB"
                   style="width: 100%"
                   :min="0"
@@ -261,14 +313,11 @@
           </a-form-item>
         </div>
 
-        <!-- ── Section 4: Comments / Details of Change ── -->
+        <!-- ── Section 4: Comments ── -->
         <div class="section-block">
-          <div class="section-title">Section 4: Comments / Details of Change</div>
-          <a-form-item label="Change Details">
-            <a-textarea v-model:value="form.change_details" placeholder="Describe the changes being made" :rows="2" />
-          </a-form-item>
+          <div class="section-title">Section 4: Comments</div>
           <a-form-item label="Comments" style="margin-bottom: 0">
-            <a-textarea v-model:value="form.comments" placeholder="Additional comments or notes" :rows="2" />
+            <a-textarea v-model:value="form.comments" placeholder="Comments or details of change" :rows="3" />
           </a-form-item>
         </div>
 
@@ -296,13 +345,6 @@
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="modal-footer">
-          <a-button @click="formModalVisible = false">Cancel</a-button>
-          <a-button type="primary" :loading="saving" @click="handleSave">
-            {{ editingItem ? 'Update' : 'Create' }}
-          </a-button>
-        </div>
       </a-form>
     </a-modal>
 
@@ -366,11 +408,7 @@
           </template>
         </a-table>
 
-        <!-- Change Details & Comments -->
-        <div v-if="detailItem.change_details" class="detail-comments">
-          <strong>Change Details:</strong>
-          <p>{{ detailItem.change_details }}</p>
-        </div>
+        <!-- Comments -->
         <div v-if="detailItem.comments" class="detail-comments">
           <strong>Comments:</strong>
           <p>{{ detailItem.comments }}</p>
@@ -404,15 +442,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
-import { personnelActionApi, employmentApi, optionsApi } from '@/api'
+import { personnelActionApi, employeeApi, employmentApi, optionsApi } from '@/api'
+import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters'
+import { cleanParams } from '@/utils/helpers'
+import { PAGINATION_DEFAULTS } from '@/constants/config'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
@@ -421,7 +461,8 @@ const getSignal = useAbortController()
 const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
-const filters = reactive({ action_type: undefined })
+const search = ref('')
+const filters = reactive({ action_type: undefined, status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 
 // Constants from backend
@@ -435,13 +476,17 @@ const constants = reactive({
 const departments = ref([])
 const positions = ref([])
 const sites = ref([])
+const sectionDepartments = ref([])
 
 // Form modal
 const formModalVisible = ref(false)
 const editingItem = ref(null)
-const staffIdSearch = ref('')
-const lookingUp = ref(false)
+const selectedEmployeeId = ref(undefined)
+const employeeOptions = ref([])
+const employeeSearching = ref(false)
+let employeeSearchTimer = null
 const lookedUpEmployment = ref(null)
+const lookingUp = ref(false)
 
 const form = reactive({
   employment_id: null,
@@ -452,13 +497,14 @@ const form = reactive({
   new_department_id: undefined,
   new_position_id: undefined,
   new_site_id: undefined,
+  new_section_department_id: undefined,
   new_salary: null,
+  new_probation_salary: null,
   new_work_schedule: '',
   new_report_to: '',
   new_pay_plan: '',
   new_phone_ext: '',
   new_email: '',
-  change_details: '',
   comments: '',
   dept_head_approved: false,
   coo_approved: false,
@@ -511,7 +557,7 @@ const tablePagination = computed(() => ({
   total: pagination.total,
   showSizeChanger: true,
   showTotal: (total) => `${total} actions`,
-  pageSizeOptions: ['10', '20', '50'],
+  pageSizeOptions: PAGINATION_DEFAULTS.pageSizeOptions,
 }))
 
 const filteredPositions = computed(() => {
@@ -519,13 +565,10 @@ const filteredPositions = computed(() => {
   return positions.value.filter((p) => p.department_id === form.new_department_id)
 })
 
-const employeeLookupName = computed(() => {
-  if (lookedUpEmployment.value) {
-    const emp = lookedUpEmployment.value.employee
-    return emp ? `${emp.first_name_en} ${emp.last_name_en || ''}`.trim() : '—'
-  }
-  if (editingItem.value) return employeeName(editingItem.value)
-  return ''
+const filteredSectionDepartments = computed(() => {
+  if (!form.new_department_id) return sectionDepartments.value
+  const deptId = Number(form.new_department_id)
+  return sectionDepartments.value.filter((sd) => Number(sd.department_id) === deptId)
 })
 
 const currentInfo = computed(() => {
@@ -534,9 +577,11 @@ const currentInfo = computed(() => {
     return {
       position: r.current_position?.title || '—',
       department: r.current_department?.name || '—',
+      sectionDepartment: r.current_section_department?.name || '—',
       site: r.current_site?.name || '—',
-      salary: r.current_salary != null ? `฿${Number(r.current_salary).toLocaleString()}` : '—',
-      employmentDate: r.current_employment_date ? dayjs(r.current_employment_date).format('DD MMM YYYY') : '—',
+      salary: formatCurrency(r.current_salary),
+      probationSalary: formatCurrency(r.current_probation_salary),
+      employmentDate: formatDate(r.current_employment_date),
     }
   }
   if (lookedUpEmployment.value) {
@@ -544,9 +589,11 @@ const currentInfo = computed(() => {
     return {
       position: emp.position?.title || '—',
       department: emp.department?.name || '—',
+      sectionDepartment: emp.section_department?.name || emp.sectionDepartment?.name || '—',
       site: emp.site?.name || '—',
-      salary: emp.salary != null ? `฿${Number(emp.salary).toLocaleString()}` : '—',
-      employmentDate: emp.start_date ? dayjs(emp.start_date).format('DD MMM YYYY') : '—',
+      salary: formatCurrency(emp.pass_probation_salary),
+      probationSalary: formatCurrency(emp.probation_salary),
+      employmentDate: formatDate(emp.start_date),
     }
   }
   return null
@@ -562,6 +609,13 @@ const changeRows = computed(() => {
       field: 'Department',
       current: d.current_department?.name || '—',
       new: d.new_department?.name || '—',
+    })
+  }
+  if (d.current_section_department || d.new_section_department) {
+    rows.push({
+      field: 'Sub-Department',
+      current: d.current_section_department?.name || '—',
+      new: d.new_section_department?.name || '—',
     })
   }
   if (d.current_position || d.new_position) {
@@ -581,8 +635,15 @@ const changeRows = computed(() => {
   if (d.current_salary != null || d.new_salary != null) {
     rows.push({
       field: 'Salary',
-      current: d.current_salary != null ? Number(d.current_salary).toLocaleString() : '—',
-      new: d.new_salary != null ? Number(d.new_salary).toLocaleString() : '—',
+      current: formatNumber(d.current_salary),
+      new: formatNumber(d.new_salary),
+    })
+  }
+  if (d.current_probation_salary != null || d.new_probation_salary != null) {
+    rows.push({
+      field: 'Probation Salary',
+      current: formatNumber(d.current_probation_salary),
+      new: formatNumber(d.new_probation_salary),
     })
   }
   if (d.new_work_schedule) rows.push({ field: 'Work Schedule', current: '—', new: d.new_work_schedule })
@@ -595,10 +656,6 @@ const changeRows = computed(() => {
 })
 
 // ======================== Helpers ========================
-function formatDate(d) {
-  return d ? dayjs(d).format('DD MMM YYYY') : '—'
-}
-
 function statusColor(status) {
   const map = { pending: 'orange', partial_approved: 'blue', fully_approved: 'green', implemented: 'default' }
   return map[status] || 'default'
@@ -632,7 +689,9 @@ async function fetchItems() {
     const params = {
       page: pagination.current_page,
       per_page: pagination.per_page,
+      ...(search.value && { search: search.value }),
       ...(filters.action_type && { action_type: filters.action_type }),
+      ...(filters.status && { status: filters.status }),
     }
     const { data } = await personnelActionApi.list(params, { signal: getSignal() })
     items.value = data.data?.data || data.data || []
@@ -659,21 +718,23 @@ async function loadConstants() {
 
 async function loadDropdowns() {
   try {
-    const [deptRes, posRes, siteRes] = await Promise.all([
+    const [deptRes, posRes, siteRes, secDeptRes] = await Promise.all([
       optionsApi.departments(),
       optionsApi.positions(),
       optionsApi.sites(),
+      optionsApi.sectionDepartments(),
     ])
     departments.value = deptRes.data?.data || deptRes.data || []
     positions.value = posRes.data?.data || posRes.data || []
     sites.value = siteRes.data?.data || siteRes.data || []
+    sectionDepartments.value = secDeptRes.data?.data || secDeptRes.data || []
   } catch {
     // silent
   }
 }
 
 // ======================== Table ========================
-function onFilterChange() {
+function onSearchOrFilterChange() {
   pagination.current_page = 1
   fetchItems()
 }
@@ -695,13 +756,14 @@ function resetForm() {
     new_department_id: undefined,
     new_position_id: undefined,
     new_site_id: undefined,
+    new_section_department_id: undefined,
     new_salary: null,
+    new_probation_salary: null,
     new_work_schedule: '',
     new_report_to: '',
     new_pay_plan: '',
     new_phone_ext: '',
     new_email: '',
-    change_details: '',
     comments: '',
     dept_head_approved: false,
     coo_approved: false,
@@ -712,7 +774,8 @@ function resetForm() {
     hr_approved_date: null,
     accountant_approved_date: null,
   })
-  staffIdSearch.value = ''
+  selectedEmployeeId.value = undefined
+  employeeOptions.value = []
   lookedUpEmployment.value = null
 }
 
@@ -733,13 +796,14 @@ function openEdit(record) {
     new_department_id: record.new_department_id || undefined,
     new_position_id: record.new_position_id || undefined,
     new_site_id: record.new_site_id || undefined,
+    new_section_department_id: record.new_section_department_id || undefined,
     new_salary: record.new_salary ? Number(record.new_salary) : null,
+    new_probation_salary: record.new_probation_salary ? Number(record.new_probation_salary) : null,
     new_work_schedule: record.new_work_schedule || '',
     new_report_to: record.new_report_to || '',
     new_pay_plan: record.new_pay_plan || '',
     new_phone_ext: record.new_phone_ext || '',
     new_email: record.new_email || '',
-    change_details: record.change_details || '',
     comments: record.comments || '',
     dept_head_approved: !!record.dept_head_approved,
     coo_approved: !!record.coo_approved,
@@ -750,34 +814,58 @@ function openEdit(record) {
     hr_approved_date: record.hr_approved_date || null,
     accountant_approved_date: record.accountant_approved_date || null,
   })
-  staffIdSearch.value = record.employment?.employee?.staff_id || ''
+  // Pre-populate employee option so the select shows the name
+  if (record.employment?.employee) {
+    const emp = record.employment.employee
+    employeeOptions.value = [{ id: emp.id, staff_id: emp.staff_id, first_name_en: emp.first_name_en, last_name_en: emp.last_name_en }]
+    selectedEmployeeId.value = emp.id
+  }
   lookedUpEmployment.value = null
   formModalVisible.value = true
 }
 
-async function lookupStaffId(value) {
-  if (!value?.trim()) return
+function handleEmployeeSearch(val) {
+  if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
+  if (!val || val.length < 2) {
+    employeeOptions.value = []
+    return
+  }
+  employeeSearching.value = true
+  employeeSearchTimer = setTimeout(async () => {
+    try {
+      const { data } = await employeeApi.list({ search: val, per_page: 10 })
+      employeeOptions.value = data.data?.data || data.data || []
+    } catch { /* ignore */ }
+    employeeSearching.value = false
+  }, 300)
+}
+
+async function handleEmployeeSelect(employeeId) {
+  if (!employeeId) {
+    lookedUpEmployment.value = null
+    form.employment_id = null
+    return
+  }
+  const emp = employeeOptions.value.find((e) => e.id === employeeId)
+  if (!emp?.staff_id) return
+
   lookingUp.value = true
   try {
-    const { data } = await employmentApi.searchByStaffId(value.trim())
-    const records = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : [])
+    const { data } = await employmentApi.searchByStaffId(emp.staff_id)
+    const records = Array.isArray(data.data) ? data.data : data.data ? [data.data] : []
     const employment = records[0]
     if (employment?.id) {
       lookedUpEmployment.value = employment
       form.employment_id = employment.id
-      message.success(`Found: ${employment.employee?.first_name_en} ${employment.employee?.last_name_en || ''}`)
-    } else if (data.employee_summary) {
-      message.warning(`${data.employee_summary.full_name} has no employment records. Please create an employment record first.`)
-      lookedUpEmployment.value = null
-      form.employment_id = null
     } else {
-      message.warning('No employee found for this Staff ID')
+      message.warning(`${emp.first_name_en} has no employment records. Please create an employment record first.`)
       lookedUpEmployment.value = null
       form.employment_id = null
     }
   } catch {
-    message.error('Failed to lookup employee')
+    message.error('Failed to lookup employment record')
     lookedUpEmployment.value = null
+    form.employment_id = null
   }
   lookingUp.value = false
 }
@@ -788,24 +876,21 @@ function onActionTypeChange(val) {
 
 function onDepartmentChange() {
   form.new_position_id = undefined
+  form.new_section_department_id = undefined
 }
 
 async function handleSave() {
-  if (!form.employment_id) return message.warning('Please lookup an employee first')
+  if (!form.employment_id) return message.warning('Please select an employee first')
   if (!form.action_type) return message.warning('Action type is required')
   if (!form.effective_date) return message.warning('Effective date is required')
   if (form.action_type === 'transfer' && !form.action_subtype) return message.warning('Transfer subtype is required')
   if (form.action_type === 'transfer' && !form.new_department_id && !form.new_site_id) return message.warning('Department or site is required for transfers')
-  if (['position_change', 'promotion', 'demotion'].includes(form.action_type) && !form.new_position_id) return message.warning('New position is required for this action type')
+  if (['promotion', 'demotion'].includes(form.action_type) && !form.new_position_id) return message.warning('New position is required for this action type')
   if (['fiscal_increment', 're_evaluated_pay'].includes(form.action_type) && !form.new_salary) return message.warning('New salary is required for salary adjustments')
 
   saving.value = true
   try {
-    const payload = { ...form }
-    // Clean empty strings
-    for (const key of Object.keys(payload)) {
-      if (payload[key] === '' || payload[key] === undefined) delete payload[key]
-    }
+    const payload = cleanParams({ ...form })
 
     if (editingItem.value) {
       await personnelActionApi.update(editingItem.value.id, payload)
@@ -871,6 +956,10 @@ onMounted(() => {
   loadConstants()
   loadDropdowns()
   fetchItems()
+})
+
+onUnmounted(() => {
+  if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
 })
 </script>
 
@@ -959,15 +1048,6 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-light);
 }
 
 /* Detail modal */

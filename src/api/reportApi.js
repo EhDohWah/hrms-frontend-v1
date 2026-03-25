@@ -58,5 +58,19 @@ export const reportApi = {
   exportIndividualLeavePdf: (params) =>
     client.post('/reports/leave-request-report/export-individual-pdf', params, { responseType: 'blob' }),
 
+  /**
+   * Export Payroll Registration Report as PDF.
+   * @param {{ organization: string, pay_period_date: string }} params
+   */
+  exportPayrollRegistrationPdf: (params) =>
+    client.post('/payrolls/registration-report', params, { responseType: 'blob' }),
+
+  /**
+   * Export PND91 government filing as text file.
+   * @param {{ organization: string, year: number }} params
+   */
+  exportPND91: (params) =>
+    client.post('/government-exports/pnd91', params, { responseType: 'blob' }),
+
   downloadBlob,
 }

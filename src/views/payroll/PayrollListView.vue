@@ -1,19 +1,31 @@
 <template>
   <div class="page-container">
-    <!-- Filters + Actions -->
-    <div class="page-header">
+    <!-- Row 1: Search + Primary Actions -->
+    <div class="toolbar-row">
+      <a-input
+        v-model:value="search"
+        placeholder="Search employee..."
+        allow-clear
+        class="filter-input"
+        style="width: 280px"
+        @pressEnter="onSearchOrFilterChange"
+        @clear="onSearchOrFilterChange"
+      >
+        <template #prefix><SearchOutlined /></template>
+      </a-input>
+      <div class="toolbar-actions">
+        <a-button @click="bulkPayslipVisible = true">
+          <FilePdfOutlined /> Bulk Payslips
+        </a-button>
+        <a-button v-if="canCreate" type="primary" @click="bulkVisible = true">
+          <ThunderboltOutlined /> Bulk Payroll
+        </a-button>
+      </div>
+    </div>
+
+    <!-- Row 2: Filters + View Toggle + Contextual Actions -->
+    <div class="toolbar-row">
       <div class="filter-bar">
-        <a-input
-          v-model:value="search"
-          placeholder="Search employee..."
-          allow-clear
-          class="filter-input"
-          style="width: 220px"
-          @pressEnter="onSearchOrFilterChange"
-          @clear="onSearchOrFilterChange"
-        >
-          <template #prefix><SearchOutlined /></template>
-        </a-input>
         <a-select
           v-model:value="filters.organization"
           placeholder="Organization"
@@ -85,17 +97,9 @@
           <a-radio-button value="budget">Budget History</a-radio-button>
         </a-radio-group>
       </div>
-      <div class="page-header-actions">
-        <a-button v-if="selectedRowKeys.length > 0 && canDelete" danger @click="handleBulkDelete">
-          Delete {{ selectedPayrollIds.length }} Record(s)
-        </a-button>
-        <a-button @click="bulkPayslipVisible = true">
-          <FilePdfOutlined /> Bulk Payslips
-        </a-button>
-        <a-button v-if="canCreate" type="primary" @click="bulkVisible = true">
-          <ThunderboltOutlined /> Bulk Payroll
-        </a-button>
-      </div>
+      <a-button v-if="selectedRowKeys.length > 0 && canDelete" danger @click="handleBulkDelete">
+        Delete {{ selectedPayrollIds.length }} Record(s)
+      </a-button>
     </div>
 
 
@@ -319,7 +323,7 @@ const innerColumns = [
   { title: 'Emp. H/W', dataIndex: 'employee_health_welfare', key: 'emp_hw', width: 90, align: 'right' },
   { title: 'Empr. H/W', dataIndex: 'employer_health_welfare', key: 'empr_hw', width: 90, align: 'right' },
   { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 85, align: 'right' },
-  { title: 'Study Loan', dataIndex: 'study_loan', key: 'study_loan', width: 95, align: 'right' },
+  { title: 'Student Loan', dataIndex: 'student_loan', key: 'student_loan', width: 95, align: 'right' },
   { title: 'Total Salary', dataIndex: 'total_salary', key: 'total_salary', width: 110, align: 'right' },
   { title: 'Total Income', dataIndex: 'total_income', key: 'total_income', width: 110, align: 'right' },
   { title: 'Empr. Contrib.', dataIndex: 'employer_contribution', key: 'empr_contrib', width: 110, align: 'right' },
@@ -563,24 +567,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-header {
+.toolbar-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.toolbar-row:last-of-type {
   margin-bottom: 16px;
 }
-@media (min-width: 640px) {
-  .page-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-.page-header-actions {
+.toolbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 /* Table card — flat, border-only */
 .payroll-table-card {

@@ -198,8 +198,7 @@ function getMonthTotal(record, dataIndex) {
   if (!monthData) return null
   if (displayField.value === 'gross_salary_by_fte') return monthData.total_gross_by_fte
   if (displayField.value === 'net_salary') return monthData.total_net
-  // gross_salary: sum from allocations
-  return monthData.allocations?.reduce((s, a) => s + (Number(a.gross_salary) || 0), 0) ?? 0
+  return monthData.total_gross
 }
 
 /** Get number of allocations for an employee in a given month */
@@ -296,8 +295,6 @@ function getAllocRowTotal(alloc) {
 .cell-employee { display: flex; flex-direction: column; }
 .cell-name { font-weight: 600; font-size: 13px; }
 .cell-sub { font-size: 11px; color: var(--color-text-muted); }
-.font-mono { font-family: 'SF Mono', 'Consolas', monospace; }
-.font-semibold { font-weight: 600; }
 .text-empty { color: #d9d9d9; }
 .budget-table :deep(.ant-table-thead > tr > th) {
   font-size: 11.5px;
@@ -316,7 +313,6 @@ function getAllocRowTotal(alloc) {
 .budget-inner-table :deep(.ant-table-tbody > tr > td) {
   padding: 4px 8px;
   font-size: 12px;
-  font-family: 'SF Mono', 'Consolas', monospace;
 }
 .summary-row { background: #f8faff; }
 .summary-row :deep(td) { border-top: 2px solid #d6e4ff; }

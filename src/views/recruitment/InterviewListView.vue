@@ -2,6 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <div class="page-header-stats">
+        <a-select
+          v-model:value="filters.year"
+          style="width: 100px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</a-select-option>
+        </a-select>
         <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
       </div>
       <div class="filter-bar">
@@ -24,10 +31,7 @@
           style="width: 140px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="scheduled">Scheduled</a-select-option>
-          <a-select-option value="completed">Completed</a-select-option>
-          <a-select-option value="cancelled">Cancelled</a-select-option>
-          <a-select-option value="no_show">No Show</a-select-option>
+          <a-select-option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.value }}</a-select-option>
         </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('interviews')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
@@ -54,21 +58,21 @@
           <template v-if="column.key === 'candidate'">
             <div class="cell-employee">
               <span class="cell-name">{{ record.candidate_name }}</span>
-              <span class="cell-sub">{{ record.candidate_email }}</span>
+              <span v-if="record.phone" class="cell-sub">{{ record.phone }}</span>
             </div>
           </template>
           <template v-else-if="column.key === 'position'">
-            {{ record.position?.title || record.position_title || '—' }}
+            {{ record.job_position || '—' }}
           </template>
           <template v-else-if="column.key === 'interview_date'">
             {{ formatDate(record.interview_date) }}
-            <span v-if="record.interview_time" class="cell-sub"> {{ record.interview_time }}</span>
+            <span v-if="record.start_time" class="cell-sub"> {{ formatTime(record.start_time) }}–{{ formatTime(record.end_time) }}</span>
           </template>
           <template v-else-if="column.key === 'interviewer'">
-            {{ record.interviewer?.first_name_en ? `${record.interviewer.first_name_en} ${record.interviewer.last_name_en}` : (record.interviewer_name || '—') }}
+            {{ record.interviewer_name || '—' }}
           </template>
           <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
+            <a-tag :color="statusColor(record.interview_status)" size="small">{{ record.interview_status || '—' }}</a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
@@ -96,19 +100,33 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="Candidate Email">
-              <a-input v-model:value="form.candidate_email" placeholder="email@example.com" />
+            <a-form-item label="Phone">
+              <a-input v-model:value="form.phone" placeholder="Phone number" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="Candidate Phone">
-          <a-input v-model:value="form.candidate_phone" placeholder="Phone number" />
-        </a-form-item>
-        <a-form-item label="Position">
-          <a-select v-model:value="form.position_id" placeholder="Select position" allow-clear show-search option-filter-prop="label">
-            <a-select-option v-for="p in positionOptions" :key="p.id" :value="p.id" :label="p.title">{{ p.title }}</a-select-option>
-          </a-select>
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Position">
+              <a-select
+                v-model:value="form.job_position"
+                show-search
+                allow-clear
+                placeholder="Select or type position"
+                :filter-option="filterPositionOption"
+              >
+                <a-select-option v-for="pos in positionOptions" :key="pos.id" :value="pos.title">{{ pos.title }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Interview Mode">
+              <a-select v-model:value="form.interview_mode">
+                <a-select-option v-for="opt in modeOptions" :key="opt.value" :value="opt.value">{{ opt.value }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Interview Date" required>
@@ -116,33 +134,30 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="Interview Time">
-              <a-time-picker v-model:value="form.interview_time" style="width: 100%" format="HH:mm" value-format="HH:mm" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-form-item label="Location">
-          <a-input v-model:value="form.location" placeholder="Enter location or meeting link" />
-        </a-form-item>
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Interviewer Name">
-              <a-input v-model:value="form.interviewer_name" placeholder="Interviewer" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
             <a-form-item label="Status">
-              <a-select v-model:value="form.status" placeholder="Select status">
-                <a-select-option value="scheduled">Scheduled</a-select-option>
-                <a-select-option value="completed">Completed</a-select-option>
-                <a-select-option value="cancelled">Cancelled</a-select-option>
-                <a-select-option value="no_show">No Show</a-select-option>
+              <a-select v-model:value="form.interview_status">
+                <a-select-option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.value }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
         </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Start Time">
+              <a-time-picker v-model:value="form.start_time" style="width: 100%" format="HH:mm" value-format="HH:mm:ss" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="End Time">
+              <a-time-picker v-model:value="form.end_time" style="width: 100%" format="HH:mm" value-format="HH:mm:ss" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Interviewer(s)">
+          <a-input v-model:value="form.interviewer_name" placeholder="e.g. John Smith, Jane Doe" />
+        </a-form-item>
         <a-form-item label="Notes">
-          <a-textarea v-model:value="form.notes" placeholder="Enter notes" :rows="3" />
+          <a-textarea v-model:value="form.feedback" placeholder="Enter notes" :rows="3" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -150,33 +165,36 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
-import { interviewApi, positionApi } from '@/api'
-
-const dayjs = inject('$dayjs')
+import { interviewApi, lookupApi, optionsApi } from '@/api'
+import { formatDate } from '@/utils/formatters'
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
 
-const items = ref([])
+const statusOptions = ref([])
+const modeOptions = ref([])
 const positionOptions = ref([])
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
+const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
-const filters = reactive({ status: undefined })
+const filters = reactive({ status: undefined, year: currentYear })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const selectedRowKeys = ref([])
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
-  candidate_name: '', candidate_email: '', candidate_phone: '',
-  position_id: undefined, interview_date: null, interview_time: null,
-  location: '', interviewer_name: '', status: 'scheduled', notes: '',
+  candidate_name: '', phone: '',
+  job_position: null, interview_date: null, start_time: null, end_time: null,
+  interview_mode: null, interviewer_name: '', interview_status: null, feedback: '',
 })
 
 const columns = [
@@ -197,11 +215,15 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50'],
 }))
 
-function formatDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
+function formatTime(t) { return t ? t.substring(0, 5) : '' }
 
 function statusColor(status) {
-  const map = { scheduled: 'blue', completed: 'green', cancelled: 'red', no_show: 'orange' }
+  const map = { scheduled: 'blue', completed: 'green', cancelled: 'orange', terminated: 'red' }
   return map[status?.toLowerCase()] || 'default'
+}
+
+function filterPositionOption(input, option) {
+  return option.value?.toLowerCase().includes(input.toLowerCase())
 }
 
 async function fetchItems() {
@@ -211,20 +233,15 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
-      ...(filters.status && { filter_hired_status: filters.status }),
+      ...(filters.status && { filter_interview_status: filters.status }),
+      ...(filters.year && { filter_year: filters.year }),
     }
     const { data } = await interviewApi.list(params, { signal: getSignal() })
     items.value = data.data || []
-    if (data.pagination) Object.assign(pagination, data.pagination)
+    const meta = data.meta || data.pagination
+    if (meta) Object.assign(pagination, meta)
   } catch (err) { if (err.name !== 'CanceledError') message.error('Failed to load interviews') }
   loading.value = false
-}
-
-async function fetchPositionOptions() {
-  try {
-    const { data } = await positionApi.options()
-    positionOptions.value = data.data || data || []
-  } catch { /* silent */ }
 }
 
 function onSearchOrFilterChange() {
@@ -240,9 +257,12 @@ function handleTableChange(pag) {
 
 function resetForm() {
   Object.assign(form, {
-    candidate_name: '', candidate_email: '', candidate_phone: '',
-    position_id: undefined, interview_date: null, interview_time: null,
-    location: '', interviewer_name: '', status: 'scheduled', notes: '',
+    candidate_name: '', phone: '',
+    job_position: null, interview_date: null, start_time: null, end_time: null,
+    interview_mode: modeOptions.value[0]?.value || null,
+    interviewer_name: '',
+    interview_status: statusOptions.value[0]?.value || null,
+    feedback: '',
   })
 }
 
@@ -256,15 +276,15 @@ function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
     candidate_name: record.candidate_name || '',
-    candidate_email: record.candidate_email || '',
-    candidate_phone: record.candidate_phone || '',
-    position_id: record.position_id || undefined,
+    phone: record.phone || '',
+    job_position: record.job_position || null,
     interview_date: record.interview_date || null,
-    interview_time: record.interview_time || null,
-    location: record.location || '',
+    start_time: record.start_time?.substring(0, 8) || null,
+    end_time: record.end_time?.substring(0, 8) || null,
+    interview_mode: record.interview_mode || modeOptions.value[0]?.value || null,
     interviewer_name: record.interviewer_name || '',
-    status: record.status || 'scheduled',
-    notes: record.notes || '',
+    interview_status: record.interview_status || statusOptions.value[0]?.value || null,
+    feedback: record.feedback || '',
   })
   modalVisible.value = true
 }
@@ -329,10 +349,23 @@ function handleBulkDelete() {
   })
 }
 
+async function fetchLookups() {
+  try {
+    const [statusRes, modeRes, posRes] = await Promise.all([
+      lookupApi.byType('interview_status'),
+      lookupApi.byType('interview_mode'),
+      optionsApi.positions(),
+    ])
+    statusOptions.value = statusRes.data?.data || []
+    modeOptions.value = modeRes.data?.data || []
+    positionOptions.value = posRes.data?.data || []
+  } catch { /* silent — dropdowns fall back to empty */ }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Interviews')
+  fetchLookups()
   fetchItems()
-  fetchPositionOptions()
 })
 </script>
 

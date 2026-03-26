@@ -1,7 +1,9 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <div />
+      <div class="page-header-stats">
+        <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
+      </div>
       <div class="filter-bar">
         <a-input
           v-model:value="search"
@@ -16,6 +18,9 @@
         </a-input>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('leave_types')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
+        </a-button>
+        <a-button v-if="authStore.canCreate('leave_types')" type="primary" @click="openCreate">
+          <PlusOutlined /> Add Leave Type
         </a-button>
       </div>
     </div>
@@ -33,25 +38,70 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'requires_attachment'">
+          <template v-if="column.key === 'default_duration'">
+            {{ record.default_duration != null ? record.default_duration + ' days' : '—' }}
+          </template>
+          <template v-else-if="column.key === 'description'">
+            {{ record.description || '—' }}
+          </template>
+          <template v-else-if="column.key === 'requires_attachment'">
             <a-tag :color="record.requires_attachment ? 'orange' : 'default'" size="small">
               {{ record.requires_attachment ? 'Yes' : 'No' }}
             </a-tag>
           </template>
+          <template v-else-if="column.key === 'actions'">
+            <a-space>
+              <a-button v-if="authStore.canUpdate('leave_types')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
+              <a-button v-if="authStore.canDelete('leave_types')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+            </a-space>
+          </template>
         </template>
       </a-table>
     </a-card>
+
+    <!-- Create/Edit Modal -->
+    <a-modal
+      v-model:open="modalVisible"
+      :title="editingItem ? 'Edit Leave Type' : 'Add Leave Type'"
+      @ok="handleSave"
+      :confirm-loading="saving"
+    >
+      <a-form :model="form" layout="vertical" class="modal-form">
+        <a-form-item label="Name" required>
+          <a-input v-model:value="form.name" placeholder="Enter leave type name" :maxlength="100" />
+        </a-form-item>
+        <a-form-item label="Default Duration (days)">
+          <a-input-number
+            v-model:value="form.default_duration"
+            :min="0"
+            :step="0.5"
+            placeholder="e.g. 12"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="Description">
+          <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" :maxlength="1000" />
+        </a-form-item>
+        <a-form-item label="Requires Attachment">
+          <a-switch
+            v-model:checked="form.requires_attachment"
+            checked-children="Yes"
+            un-checked-children="No"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, createVNode } from 'vue'
+import { ref, reactive, computed, createVNode, onMounted } from 'vue'
 import { Modal, message } from 'ant-design-vue'
+import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { leaveApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { SearchOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -60,21 +110,31 @@ const getSignal = useAbortController()
 const leaveTypes = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
+const saving = ref(false)
 const search = ref('')
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
+const modalVisible = ref(false)
+const editingItem = ref(null)
+const form = reactive({ name: '', default_duration: null, description: '', requires_attachment: false })
 
 const columns = [
-  { title: 'Name', dataIndex: 'name', width: 200 },
-  { title: 'Default Duration', dataIndex: 'default_duration', width: 140, align: 'center' },
-  { title: 'Description', dataIndex: 'description', ellipsis: true },
+  { title: 'Name', dataIndex: 'name', width: 200, sorter: true },
+  { title: 'Default Duration', key: 'default_duration', width: 140, align: 'center' },
+  { title: 'Description', key: 'description', ellipsis: true },
   { title: 'Requires Attachment', key: 'requires_attachment', width: 160, align: 'center' },
+  { title: '', key: 'actions', width: 140, align: 'right' },
 ]
+
+const sortField = ref(null)
+const sortOrder = ref(null)
 
 const tablePagination = computed(() => ({
   current: pagination.current_page,
   pageSize: pagination.per_page,
   total: pagination.total,
+  showSizeChanger: true,
   showTotal: (total) => `${total} leave types`,
+  pageSizeOptions: ['10', '20', '50'],
 }))
 
 async function fetchTypes() {
@@ -84,6 +144,8 @@ async function fetchTypes() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
+      ...(sortField.value && { sort_by: sortField.value }),
+      ...(sortOrder.value && { sort_order: sortOrder.value === 'ascend' ? 'asc' : 'desc' }),
     }
     const { data } = await leaveApi.types(params, { signal: getSignal() })
     leaveTypes.value = data.data || []
@@ -97,10 +159,84 @@ function onSearchOrFilterChange() {
   fetchTypes()
 }
 
-function handleTableChange(pag) {
+function handleTableChange(pag, _filters, sorter) {
   pagination.current_page = pag.current
   pagination.per_page = pag.pageSize
+
+  if (sorter && sorter.columnKey) {
+    const sortMap = { name: 'name' }
+    sortField.value = sortMap[sorter.columnKey] || null
+    sortOrder.value = sorter.order || null
+  } else {
+    sortField.value = null
+    sortOrder.value = null
+  }
+
   fetchTypes()
+}
+
+function resetForm() {
+  Object.assign(form, { name: '', default_duration: null, description: '', requires_attachment: false })
+}
+
+function openCreate() {
+  editingItem.value = null
+  resetForm()
+  modalVisible.value = true
+}
+
+function openEdit(record) {
+  editingItem.value = record
+  Object.assign(form, {
+    name: record.name || '',
+    default_duration: record.default_duration ?? null,
+    description: record.description || '',
+    requires_attachment: record.requires_attachment || false,
+  })
+  modalVisible.value = true
+}
+
+async function handleSave() {
+  if (!form.name) return message.warning('Name is required')
+  saving.value = true
+  try {
+    if (editingItem.value) {
+      await leaveApi.typeUpdate(editingItem.value.id, { ...form })
+      message.success('Leave type updated')
+    } else {
+      await leaveApi.typeStore({ ...form })
+      message.success('Leave type created')
+    }
+    modalVisible.value = false
+    fetchTypes()
+  } catch (err) {
+    const resp = err.response?.data
+    if (resp?.errors) {
+      const firstErr = Object.values(resp.errors)[0]
+      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+    } else {
+      message.error(resp?.message || 'Failed to save')
+    }
+  }
+  saving.value = false
+}
+
+function handleDelete(record) {
+  Modal.confirm({
+    title: 'Delete Leave Type',
+    content: `Are you sure you want to delete "${record.name}"?`,
+    okType: 'danger',
+    onOk: async () => {
+      try {
+        await leaveApi.typeDestroy(record.id)
+        message.success('Leave type deleted')
+        selectedRowKeys.value = []
+        fetchTypes()
+      } catch (err) {
+        message.error(err.response?.data?.message || 'Failed to delete')
+      }
+    },
+  })
 }
 
 function handleBulkDelete() {
@@ -143,4 +279,6 @@ onMounted(() => { appStore.setPageMeta('Leave Types'); fetchTypes() })
     justify-content: space-between;
   }
 }
+.page-header-stats { display: flex; gap: 6px; }
+.modal-form { margin-top: 16px; }
 </style>

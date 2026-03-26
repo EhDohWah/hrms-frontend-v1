@@ -19,7 +19,7 @@
         <a-select v-model:value="filters.status" placeholder="Status" allow-clear class="filter-input" style="width: 140px" @change="onSearchOrFilterChange">
           <a-select-option value="pending">Pending</a-select-option>
           <a-select-option value="approved">Approved</a-select-option>
-          <a-select-option value="rejected">Rejected</a-select-option>
+          <a-select-option value="declined">Declined</a-select-option>
           <a-select-option value="cancelled">Cancelled</a-select-option>
         </a-select>
         <a-button
@@ -98,126 +98,216 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingId ? 'Edit Leave Request' : 'Add Leave Request'"
-      :width="'min(95vw, 680px)'"
+      :width="'min(95vw, 820px)'"
       :footer="null"
       destroy-on-close
       @cancel="closeModal"
     >
-      <a-form layout="vertical" @finish="handleSave">
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item label="Employee" required>
-              <a-select
-                v-model:value="form.employee_id"
-                placeholder="Search employee by name or staff ID..."
-                show-search
-                :filter-option="false"
-                :loading="employeesLoading"
-                :not-found-content="employeeSearchQuery ? 'No employees found' : 'Type to search...'"
-                allow-clear
-                style="width: 100%"
-                @search="onEmployeeSearch"
-              >
-                <a-select-option
-                  v-for="emp in employees"
-                  :key="emp.id"
-                  :value="emp.id"
-                  :label="`${emp.first_name_en} ${emp.last_name_en} — ${emp.staff_id}`"
+      <a-form layout="vertical" class="modal-form" @submit.prevent="handleSave">
+        <!-- Employee -->
+        <a-form-item label="Employee" required>
+          <a-select
+            v-model:value="form.employee_id"
+            placeholder="Search employee by name or staff ID..."
+            show-search
+            :filter-option="false"
+            :loading="employeesLoading"
+            :disabled="!!editingId"
+            :not-found-content="employeeSearchQuery ? 'No employees found' : 'Type to search...'"
+            allow-clear
+            style="width: 100%"
+            @search="onEmployeeSearch"
+          >
+            <a-select-option
+              v-for="emp in employees"
+              :key="emp.id"
+              :value="emp.id"
+              :label="`${emp.first_name_en} ${emp.last_name_en} — ${emp.staff_id}`"
+            >
+              {{ emp.first_name_en }} {{ emp.last_name_en }}
+              <span class="font-mono" style="color: var(--color-text-muted); font-size: 12px; margin-left: 6px">{{ emp.staff_id }}</span>
+            </a-select-option>
+          </a-select>
+          <div v-if="editingId" class="field-hint">Employee cannot be changed in edit mode</div>
+        </a-form-item>
+
+        <!-- Leave Items -->
+        <a-form-item required>
+          <template #label>
+            <div class="label-with-action">
+              <span>Leave Request Details</span>
+              <a-button type="link" size="small" @click="addItem"><PlusOutlined /> Add Leave Type</a-button>
+            </div>
+          </template>
+          <div v-for="(item, index) in form.items" :key="index" class="leave-item-card">
+            <div class="item-grid">
+              <div>
+                <div class="item-label">Leave Type <span class="required-mark">*</span></div>
+                <a-select
+                  v-model:value="item.leave_type_id"
+                  placeholder="Select type"
+                  :loading="leaveTypesLoading"
+                  allow-clear
+                  size="small"
+                  style="width: 100%"
+                  @change="onLeaveTypeChange(index)"
                 >
-                  {{ emp.first_name_en }} {{ emp.last_name_en }}
-                  <span class="font-mono" style="color: var(--color-text-muted); font-size: 12px; margin-left: 6px">{{ emp.staff_id }}</span>
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+                  <a-select-option v-for="lt in getAvailableLeaveTypes(index)" :key="lt.id" :value="lt.id">
+                    {{ lt.name }}
+                  </a-select-option>
+                </a-select>
+              </div>
+              <div>
+                <div class="item-label">From <span class="required-mark">*</span></div>
+                <a-date-picker
+                  v-model:value="item.start_date"
+                  format="DD MMM YYYY"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 100%"
+                  placeholder="Start"
+                  @change="onItemDateChange(index)"
+                />
+              </div>
+              <div>
+                <div class="item-label">To <span class="required-mark">*</span></div>
+                <a-date-picker
+                  v-model:value="item.end_date"
+                  format="DD MMM YYYY"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 100%"
+                  placeholder="End"
+                  @change="onItemDateChange(index)"
+                />
+              </div>
+              <div>
+                <div class="item-label">Days</div>
+                <a-input
+                  :value="item.days ?? '—'"
+                  size="small"
+                  read-only
+                  class="days-readonly"
+                />
+              </div>
+              <div>
+                <div class="item-label">Balance</div>
+                <div class="balance-badge" :class="balanceBadgeClass(item)">
+                  <template v-if="itemBalances[item.leave_type_id] !== undefined">
+                    {{ itemBalances[item.leave_type_id] }}d
+                  </template>
+                  <LoadingOutlined v-else-if="balanceLoading[item.leave_type_id]" />
+                  <template v-else>—</template>
+                </div>
+              </div>
+              <div>
+                <div class="item-label" style="visibility: hidden">X</div>
+                <a-button
+                  type="text"
+                  danger
+                  size="small"
+                  :disabled="form.items.length <= 1"
+                  @click="removeItem(index)"
+                >
+                  <DeleteOutlined />
+                </a-button>
+              </div>
+            </div>
+            <!-- Balance warning -->
+            <div
+              v-if="item.leave_type_id && item.days > 0 && itemBalances[item.leave_type_id] !== undefined && item.days > itemBalances[item.leave_type_id]"
+              class="balance-warning"
+            >
+              <WarningOutlined /> Insufficient balance — available: {{ itemBalances[item.leave_type_id] }}d, requested: {{ item.days }}d
+            </div>
+          </div>
+        </a-form-item>
 
+        <!-- Status + Reason -->
         <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="Start Date" required>
-              <a-date-picker
-                v-model:value="form.start_date"
-                format="DD MMM YYYY"
-                value-format="YYYY-MM-DD"
-                style="width: 100%"
-                placeholder="Select start date"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="End Date" required>
-              <a-date-picker
-                v-model:value="form.end_date"
-                format="DD MMM YYYY"
-                value-format="YYYY-MM-DD"
-                style="width: 100%"
-                placeholder="Select end date"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
-
-        <a-row :gutter="16">
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item label="Status">
               <a-select v-model:value="form.status" placeholder="Select status" allow-clear>
                 <a-select-option value="pending">Pending</a-select-option>
                 <a-select-option value="approved">Approved</a-select-option>
-                <a-select-option value="rejected">Rejected</a-select-option>
+                <a-select-option value="declined">Declined</a-select-option>
                 <a-select-option value="cancelled">Cancelled</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col :span="16">
             <a-form-item label="Reason">
-              <a-input v-model:value="form.reason" placeholder="Enter reason (optional)" allow-clear />
+              <a-textarea
+                v-model:value="form.reason"
+                placeholder="Enter reason for leave request"
+                :rows="2"
+                :maxlength="1000"
+                show-count
+              />
             </a-form-item>
           </a-col>
         </a-row>
 
-        <!-- Leave Items -->
-        <a-form-item label="Leave Items" required>
-          <div
-            v-for="(item, index) in form.items"
-            :key="index"
-            class="leave-item-row"
-          >
-            <a-select
-              v-model:value="item.leave_type_id"
-              placeholder="Leave type"
-              :loading="leaveTypesLoading"
-              allow-clear
-              style="flex: 1"
-            >
-              <a-select-option
-                v-for="lt in leaveTypes"
-                :key="lt.id"
-                :value="lt.id"
-              >
-                {{ lt.name }}
-              </a-select-option>
-            </a-select>
-            <a-input-number
-              v-model:value="item.days"
-              :min="0.5"
-              :step="0.5"
-              placeholder="Days"
-              style="width: 100px"
-            />
-            <a-button
-              v-if="form.items.length > 1"
-              type="text"
-              danger
-              @click="removeItem(index)"
-            >
-              Remove
-            </a-button>
-          </div>
-          <a-button type="dashed" style="width: 100%; margin-top: 8px" @click="addItem">
-            <template #icon><PlusOutlined /></template>
-            Add Leave Type
-          </a-button>
+        <!-- Approval Information -->
+        <a-divider orientation="left" orientation-margin="0" style="font-size: 13px; color: var(--color-text-secondary)">
+          Approval Information
+        </a-divider>
+        <div class="approval-hint">Record approval status and dates as shown on physical forms</div>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item>
+              <a-checkbox v-model:checked="form.supervisor_approved">Supervisor Approved</a-checkbox>
+            </a-form-item>
+            <a-form-item v-if="form.supervisor_approved" label="Supervisor Approval Date">
+              <a-date-picker
+                v-model:value="form.supervisor_approved_date"
+                format="DD MMM YYYY"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item>
+              <a-checkbox v-model:checked="form.hr_site_admin_approved">HR/Site Admin Approved</a-checkbox>
+            </a-form-item>
+            <a-form-item v-if="form.hr_site_admin_approved" label="HR/Site Admin Approval Date">
+              <a-date-picker
+                v-model:value="form.hr_site_admin_approved_date"
+                format="DD MMM YYYY"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <!-- Attachment Notes -->
+        <a-form-item label="Attachment Notes">
+          <a-textarea
+            v-model:value="form.attachment_notes"
+            placeholder="Reference any documents attached to the paper form (e.g., 'Medical certificate submitted')"
+            :rows="2"
+          />
         </a-form-item>
+
+        <a-alert
+          v-if="requiresAttachment && !form.attachment_notes?.trim()"
+          message="This leave type requires attachment notes. Please describe any documents attached."
+          type="warning"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
+        <!-- Overlap warning -->
+        <a-alert
+          v-if="overlapWarning"
+          :message="overlapWarning"
+          type="error"
+          show-icon
+          style="margin-bottom: 16px"
+        />
 
         <div class="modal-footer">
           <a-button @click="closeModal">Cancel</a-button>
@@ -231,16 +321,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { leaveApi } from '@/api/leaveApi'
 import { employeeApi } from '@/api/employeeApi'
 import { useAbortController } from '@/composables/useAbortController'
-import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { formatDate } from '@/utils/formatters'
+import {
+  SearchOutlined, PlusOutlined, ExclamationCircleOutlined,
+  DeleteOutlined, LoadingOutlined, WarningOutlined,
+} from '@ant-design/icons-vue'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
@@ -279,13 +372,18 @@ const modalVisible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
 
+const defaultItem = () => ({ leave_type_id: undefined, start_date: null, end_date: null, days: null })
+
 const defaultForm = () => ({
   employee_id: undefined,
-  start_date: null,
-  end_date: null,
   status: undefined,
   reason: '',
-  items: [{ leave_type_id: undefined, days: null }],
+  items: [defaultItem()],
+  supervisor_approved: false,
+  supervisor_approved_date: null,
+  hr_site_admin_approved: false,
+  hr_site_admin_approved_date: null,
+  attachment_notes: '',
 })
 
 const form = reactive(defaultForm())
@@ -298,6 +396,12 @@ const employeeSearchQuery = ref('')
 let employeeSearchTimer = null
 const leaveTypes = ref([])
 const leaveTypesLoading = ref(false)
+
+// ── Balance + calculation state ──────────────────────────────────────────────
+
+const itemBalances = reactive({})
+const balanceLoading = reactive({})
+const overlapWarning = ref(null)
 
 async function loadModalOptions() {
   if (leaveTypes.value.length) return
@@ -336,11 +440,107 @@ async function searchEmployees(query) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
-
 function statusColor(status) {
-  const map = { pending: 'orange', approved: 'green', rejected: 'red', cancelled: 'default' }
+  const map = { pending: 'orange', approved: 'green', declined: 'red', cancelled: 'default' }
   return map[status?.toLowerCase()] || 'default'
+}
+
+const requiresAttachment = computed(() =>
+  form.items.some(item => {
+    const lt = leaveTypes.value.find(t => t.id === item.leave_type_id)
+    return lt?.requires_attachment
+  })
+)
+
+function getAvailableLeaveTypes(currentIndex) {
+  const selectedIds = form.items
+    .map((item, i) => i !== currentIndex ? item.leave_type_id : null)
+    .filter(Boolean)
+  return leaveTypes.value.filter(lt => !selectedIds.includes(lt.id))
+}
+
+function balanceBadgeClass(item) {
+  const bal = itemBalances[item.leave_type_id]
+  if (bal === undefined) return ''
+  if (item.days && item.days > bal) return 'balance-danger'
+  if (bal <= 3) return 'balance-warning-color'
+  return 'balance-ok'
+}
+
+// ── Balance fetching ─────────────────────────────────────────────────────────
+
+async function fetchBalance(leaveTypeId) {
+  if (!form.employee_id || !leaveTypeId) return
+  if (balanceLoading[leaveTypeId]) return
+  balanceLoading[leaveTypeId] = true
+  try {
+    const { data } = await leaveApi.balanceShow(form.employee_id, leaveTypeId)
+    const bal = data?.data
+    itemBalances[leaveTypeId] = bal?.remaining_days ?? 0
+  } catch {
+    itemBalances[leaveTypeId] = 0
+  } finally {
+    balanceLoading[leaveTypeId] = false
+  }
+}
+
+function onLeaveTypeChange(index) {
+  const item = form.items[index]
+  if (item.leave_type_id && form.employee_id) {
+    fetchBalance(item.leave_type_id)
+  }
+}
+
+async function fetchAllBalances() {
+  for (const item of form.items) {
+    if (item.leave_type_id) fetchBalance(item.leave_type_id)
+  }
+}
+
+// ── Per-item days calculation ────────────────────────────────────────────────
+
+async function onItemDateChange(index) {
+  const item = form.items[index]
+  item.days = null
+  if (!item.start_date || !item.end_date) return
+  try {
+    const { data } = await leaveApi.calculateDays({ start_date: item.start_date, end_date: item.end_date })
+    item.days = data?.data?.working_days ?? null
+  } catch { /* silent */ }
+}
+
+/** Derive request-level start/end from all items */
+function getDerivedDateRange() {
+  const starts = form.items.map(i => i.start_date).filter(Boolean).sort()
+  const ends = form.items.map(i => i.end_date).filter(Boolean).sort()
+  return {
+    start_date: starts[0] || null,
+    end_date: ends[ends.length - 1] || null,
+  }
+}
+
+// ── Overlap check ────────────────────────────────────────────────────────────
+
+async function checkOverlap() {
+  const { start_date, end_date } = getDerivedDateRange()
+  if (!form.employee_id || !start_date || !end_date) return true
+  try {
+    const payload = {
+      employee_id: form.employee_id,
+      start_date,
+      end_date,
+      ...(editingId.value && { exclude_request_id: editingId.value }),
+    }
+    const { data } = await leaveApi.checkOverlap(payload)
+    if (data?.data?.has_overlap) {
+      overlapWarning.value = data.data.message || 'This date range overlaps with an existing leave request.'
+      return false
+    }
+    overlapWarning.value = null
+    return true
+  } catch {
+    return true
+  }
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -374,28 +574,45 @@ function handleTableChange(pag) {
 
 // ── Modal open / close ────────────────────────────────────────────────────────
 
+function resetModalState() {
+  Object.keys(itemBalances).forEach(k => delete itemBalances[k])
+  Object.keys(balanceLoading).forEach(k => delete balanceLoading[k])
+  overlapWarning.value = null
+}
+
 function openCreate() {
   editingId.value = null
   Object.assign(form, defaultForm())
+  resetModalState()
   modalVisible.value = true
   loadModalOptions()
 }
 
 function openEdit(record) {
   editingId.value = record.id
+  resetModalState()
   form.employee_id = record.employee?.id ?? undefined
-  form.start_date = record.start_date || null
-  form.end_date = record.end_date || null
   form.status = record.status || undefined
   form.reason = record.reason || ''
   form.items = record.items?.length
-    ? record.items.map((i) => ({ leave_type_id: i.leave_type?.id ?? i.leave_type_id, days: i.days }))
-    : [{ leave_type_id: undefined, days: null }]
+    ? record.items.map((i) => ({
+        leave_type_id: i.leave_type?.id ?? i.leave_type_id,
+        start_date: record.start_date || null,
+        end_date: record.end_date || null,
+        days: i.days,
+      }))
+    : [defaultItem()]
+  form.supervisor_approved = record.supervisor_approved || false
+  form.supervisor_approved_date = record.supervisor_approved_date || null
+  form.hr_site_admin_approved = record.hr_site_admin_approved || false
+  form.hr_site_admin_approved_date = record.hr_site_admin_approved_date || null
+  form.attachment_notes = record.attachment_notes || ''
   if (record.employee) {
     employees.value = [record.employee]
   }
   modalVisible.value = true
   loadModalOptions()
+  if (form.employee_id) fetchAllBalances()
 }
 
 function closeModal() {
@@ -406,32 +623,51 @@ function closeModal() {
 // ── Leave item rows ───────────────────────────────────────────────────────────
 
 function addItem() {
-  form.items.push({ leave_type_id: undefined, days: null })
+  form.items.push(defaultItem())
 }
 
 function removeItem(index) {
+  const removed = form.items[index]
   form.items.splice(index, 1)
+  if (removed.leave_type_id) {
+    delete itemBalances[removed.leave_type_id]
+    delete balanceLoading[removed.leave_type_id]
+  }
 }
 
 // ── Create / Update ───────────────────────────────────────────────────────────
 
 async function handleSave() {
   if (!form.employee_id) { message.warning('Please select an employee'); return }
-  if (!form.start_date || !form.end_date) { message.warning('Please select a date range'); return }
-  if (form.items.some((i) => !i.leave_type_id || !i.days)) {
-    message.warning('Please fill in all leave type items')
+  const incompleteItem = form.items.some((i) => !i.leave_type_id || !i.start_date || !i.end_date || !i.days)
+  if (incompleteItem) {
+    message.warning('Please fill in all fields for each leave item (type, dates)')
+    return
+  }
+  if (requiresAttachment.value && !form.attachment_notes?.trim()) {
+    message.warning('Attachment notes are required for the selected leave type')
     return
   }
 
   saving.value = true
+
+  // Overlap check
+  const noOverlap = await checkOverlap()
+  if (!noOverlap) { saving.value = false; return }
   try {
+    const { start_date, end_date } = getDerivedDateRange()
     const payload = {
       employee_id: form.employee_id,
-      start_date: form.start_date,
-      end_date: form.end_date,
+      start_date,
+      end_date,
       ...(form.status && { status: form.status }),
-      ...(form.reason.trim() && { reason: form.reason.trim() }),
+      ...(form.reason?.trim() && { reason: form.reason.trim() }),
       items: form.items.map((i) => ({ leave_type_id: i.leave_type_id, days: i.days })),
+      supervisor_approved: form.supervisor_approved,
+      ...(form.supervisor_approved && form.supervisor_approved_date && { supervisor_approved_date: form.supervisor_approved_date }),
+      hr_site_admin_approved: form.hr_site_admin_approved,
+      ...(form.hr_site_admin_approved && form.hr_site_admin_approved_date && { hr_site_admin_approved_date: form.hr_site_admin_approved_date }),
+      ...(form.attachment_notes?.trim() && { attachment_notes: form.attachment_notes.trim() }),
     }
 
     if (editingId.value) {
@@ -524,11 +760,92 @@ onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
 .cell-name { font-weight: 600; font-size: 13.5px; }
 .cell-staff-id { font-size: 12px; color: var(--color-text-muted); }
 
-.leave-item-row {
+.modal-form { margin-top: 16px; }
+
+.field-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.label-with-action {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.leave-item-card {
+  padding: 14px 16px;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  background: var(--color-bg-subtle);
+  transition: border-color var(--transition-base);
+}
+.leave-item-card:hover { border-color: #c7d2fe; }
+
+.item-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 0.7fr 0.7fr 40px;
+  gap: 10px;
+  align-items: end;
+}
+@media (max-width: 768px) {
+  .item-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.item-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.required-mark { color: var(--color-danger); }
+
+.days-readonly {
+  text-align: center;
+  background: var(--color-bg-muted) !important;
+  cursor: default;
+}
+.days-readonly :deep(input) {
+  text-align: center;
+  cursor: default;
+}
+
+.balance-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  white-space: nowrap;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+}
+.balance-ok { background: #f0fdf4; color: #16a34a; }
+.balance-warning-color { background: #fffbeb; color: #d97706; }
+.balance-danger { background: #fef2f2; color: #dc2626; }
+
+.balance-warning {
+  font-size: 12px;
+  color: #d97706;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fed7aa;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.approval-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
 }
 
 .modal-footer {

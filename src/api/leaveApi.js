@@ -3,6 +3,9 @@ import client from './axios'
 export const leaveApi = {
   types: (params, config) => client.get('/leave-types', { params, ...config }),
   typeOptions: () => client.get('/leave-types/options'),
+  typeStore: (payload) => client.post('/leave-types', payload),
+  typeUpdate: (id, payload) => client.put(`/leave-types/${id}`, payload),
+  typeDestroy: (id) => client.delete(`/leave-types/${id}`),
   typeDestroyBatch: (ids) => client.delete('/leave-types/batch', { data: { ids } }),
   requests: (params, config) => client.get('/leave-requests', { params, ...config }),
   requestShow: (id) => client.get(`/leave-requests/${id}`),

@@ -148,7 +148,7 @@ const navSections = computed(() => [
     tourKey: 'grants-menu',
     items: [
       { key: 'grants', label: 'Grants', icon: TrophyOutlined, route: 'grants', permission: 'grants_list' },
-      { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grants_list' },
+      { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grant_position' },
     ],
   },
   {

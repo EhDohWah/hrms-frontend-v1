@@ -284,7 +284,7 @@ const allocColumns = [
   { title: 'Emp. H/W', key: 'employee_hw', width: 85, align: 'right' },
   { title: 'Empr. H/W', key: 'employer_hw', width: 85, align: 'right' },
   { title: 'Tax', key: 'tax', width: 85, align: 'right' },
-  { title: 'Study Loan', key: 'study_loan', width: 90, align: 'right' },
+  { title: 'Student Loan', key: 'student_loan', width: 90, align: 'right' },
   // Totals
   { title: 'Total Deduction', key: 'total_deduction', width: 110, align: 'right' },
   { title: 'Employer Contrib.', key: 'employer_total', width: 115, align: 'right' },
@@ -508,7 +508,7 @@ function getAllocValue(alloc, key) {
     employee_hw: alloc.deductions?.employee_hw,
     employer_hw: alloc.contributions?.employer_hw,
     tax: alloc.deductions?.tax,
-    study_loan: alloc.deductions?.study_loan,
+    student_loan: alloc.deductions?.student_loan,
     total_deduction: alloc.deductions?.total,
     employer_total: alloc.contributions?.total,
     total_salary: alloc.total_salary,

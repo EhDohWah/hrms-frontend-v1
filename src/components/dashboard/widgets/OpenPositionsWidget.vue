@@ -6,22 +6,25 @@
         <router-link
           v-for="p in positions"
           :key="p.id"
-          :to="`/positions`"
+          to="/grant-positions"
           class="position-item"
         >
           <div class="position-icon">
             <SolutionOutlined />
           </div>
           <div class="position-info">
-            <span class="position-title">{{ p.title }}</span>
-            <span class="position-dept">{{ p.department || 'Unassigned' }}</span>
+            <span class="position-title">{{ p.position }}</span>
+            <span class="position-dept">{{ p.grant_code }} &middot; {{ p.budgetline_code || '—' }}</span>
           </div>
-          <a-tag color="red" size="small" class="vacancy-tag">Vacant</a-tag>
+          <div class="vacancy-counts">
+            <a-tag color="orange" size="small">{{ p.vacancies }} open</a-tag>
+            <span class="counts-detail">{{ p.recruited }}/{{ p.manpower }}</span>
+          </div>
         </router-link>
       </div>
-      <router-link to="/positions" class="widget-view-all">View all positions &rarr;</router-link>
+      <router-link to="/grant-positions" class="widget-view-all">View all grant positions &rarr;</router-link>
     </template>
-    <a-empty v-else description="All positions are filled" :image="simpleImage" />
+    <a-empty v-else description="All grant positions are filled" :image="simpleImage" />
   </div>
 </template>
 
@@ -74,5 +77,6 @@ onMounted(async () => {
 .position-info { flex: 1; min-width: 0; }
 .position-title { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .position-dept { font-size: 11px; color: var(--color-text-secondary); }
-.vacancy-tag { margin: 0; }
+.vacancy-counts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.counts-detail { font-size: 11px; color: var(--color-text-secondary); font-family: 'SF Mono', 'Consolas', monospace; }
 </style>

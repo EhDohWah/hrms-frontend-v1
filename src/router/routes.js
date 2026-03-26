@@ -113,7 +113,7 @@ export const routes = [
         path: 'grant-positions',
         name: 'grant-positions',
         component: () => import('@/views/grants/GrantPositionListView.vue'),
-        meta: { title: 'Grant Positions', permission: 'grants_list' },
+        meta: { title: 'Grant Positions', permission: 'grant_position' },
       },
 
       // ---- Recruitment ----

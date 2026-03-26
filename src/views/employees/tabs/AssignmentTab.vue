@@ -70,7 +70,7 @@
         <InfoField label="Health Welfare" :value="employee.employment.health_welfare ? 'Yes' : 'No'" />
         <InfoField label="PVD" :value="employee.employment.pvd ? 'Yes' : 'No'" />
         <InfoField label="Saving Fund" :value="employee.employment.saving_fund ? 'Yes' : 'No'" />
-        <InfoField label="Study Loan" :value="employee.employment.study_loan > 0 ? `${formatCurrency(employee.employment.study_loan)}/month` : 'None'" />
+        <InfoField label="Student Loan" :value="employee.employment.student_loan > 0 ? `${formatCurrency(employee.employment.student_loan)}/month` : 'None'" />
         <InfoField label="Retroactive Salary" :value="employee.employment.retroactive_salary != 0 && employee.employment.retroactive_salary != null ? formatCurrency(employee.employment.retroactive_salary) : 'None'" />
       </div>
 
@@ -358,9 +358,9 @@
         </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Study Loan Deduction (THB/month)">
+            <a-form-item label="Student Loan Deduction (THB/month)">
               <a-input-number
-                v-model:value="empForm.study_loan"
+                v-model:value="empForm.student_loan"
                 :min="0"
                 :max="999999.99"
                 :precision="2"
@@ -568,7 +568,7 @@ const empForm = reactive({
   health_welfare: false,
   pvd: false,
   saving_fund: false,
-  study_loan: null,
+  student_loan: null,
   retroactive_salary: null,
 })
 
@@ -762,7 +762,7 @@ function resetEmpForm() {
     end_probation_date: null, pass_probation_date: null,
     pass_probation_salary: null, probation_salary: null,
     pay_method: undefined, health_welfare: false, pvd: false, saving_fund: false,
-    study_loan: null, retroactive_salary: null,
+    student_loan: null, retroactive_salary: null,
   })
 }
 
@@ -799,7 +799,7 @@ async function openEditEmployment() {
     health_welfare: !!emp.health_welfare,
     pvd: !!emp.pvd,
     saving_fund: !!emp.saving_fund,
-    study_loan: emp.study_loan != null ? Number(emp.study_loan) : null,
+    student_loan: emp.student_loan != null ? Number(emp.student_loan) : null,
     retroactive_salary: emp.retroactive_salary != null ? Number(emp.retroactive_salary) : null,
   })
   nextTick(() => {
@@ -832,7 +832,7 @@ async function handleSaveEmployment() {
     health_welfare: empForm.health_welfare,
     pvd: empForm.pvd,
     saving_fund: empForm.saving_fund,
-    study_loan: empForm.study_loan || 0,
+    student_loan: empForm.student_loan || 0,
     retroactive_salary: empForm.retroactive_salary || 0,
   }
   if (empForm.section_department_id) payload.section_department_id = empForm.section_department_id

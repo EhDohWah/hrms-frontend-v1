@@ -16,7 +16,7 @@
 
     <!-- Logo (hidden on mobile since we have the close header) -->
     <div class="sidebar-logo">
-      <div class="logo-mark">H</div>
+      <div class="logo-mark">HR</div>
       <transition name="fade">
         <span v-if="!appStore.sidebarCollapsed" class="logo-text">HRMS</span>
       </transition>
@@ -189,6 +189,7 @@ const navSections = computed(() => [
     tourKey: 'training-menu',
     items: [
       { key: 'training', label: 'Training', icon: ReadOutlined, route: 'training', permission: 'training_list' },
+      { key: 'training-types', label: 'Training Types', icon: OrderedListOutlined, route: 'training-types', permission: 'training_types' },
       { key: 'employee-training', label: 'Employee Training', icon: SolutionOutlined, route: 'employee-training', permission: 'employee_training' },
     ],
   },
@@ -260,8 +261,10 @@ const visibleSections = computed(() =>
   )
 )
 
+const activeSegment = computed(() => route.path.split('/')[1])
+
 function isActive(item) {
-  return route.name === item.route || route.path.startsWith(`/${item.key}`)
+  return route.name === item.route || activeSegment.value === item.key
 }
 
 function navigate(item) {

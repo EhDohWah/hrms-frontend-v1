@@ -53,6 +53,7 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
+              <a-button size="small" type="link" @click="openView(record)">View</a-button>
               <a-button v-if="authStore.canUpdate('grants_list')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('grants_list')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -192,6 +193,40 @@
         </a-row>
       </a-form>
     </a-modal>
+
+    <!-- Grant Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewGrant" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :org="viewOrgConfig"
+          :title="viewGrant.name"
+          :ref-id="viewGrant.code"
+          icon="report-money"
+          badge="Grant Record"
+          :status="viewStatusKey"
+          :status-label="viewGrant.status"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -203,8 +238,9 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
 import { grantApi, grantItemApi } from '@/api'
-import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
 import { formatCurrency, formatDate } from '@/utils/formatters'
+import RecordView from '@/components/common/RecordView.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -455,6 +491,130 @@ function handleDeletePosition(pos) {
   })
 }
 
+// ---- Record View Modal ----
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewGrant = ref(null)
+
+const viewOrgConfig = computed(() => ORG_RECORD_VIEW_CONFIG[viewGrant.value?.organization] ?? null)
+
+const viewStatusMap = { 'Active': 'active', 'Expired': 'expired', 'Ending Soon': 'ending-soon' }
+const viewStatusKey = computed(() => viewStatusMap[viewGrant.value?.status] || 'active')
+
+const viewStatusMeta = computed(() => {
+  const g = viewGrant.value
+  if (!g) return []
+  const meta = []
+  if (g.end_date) {
+    meta.push({ icon: 'calendar', text: `Ends ${formatDate(g.end_date)}` })
+  } else {
+    meta.push({ icon: 'calendar', text: 'No end date (open-ended)' })
+  }
+  if (g.days_until_expiration != null && g.days_until_expiration > 0) {
+    meta.push({ icon: 'clock', text: `${g.days_until_expiration} days remaining` })
+  }
+  const itemsCount = g.grant_items_count ?? g.grant_items?.length ?? 0
+  if (itemsCount > 0) {
+    meta.push({ icon: 'users', text: `${itemsCount} position(s)` })
+  }
+  return meta
+})
+
+const viewSections = computed(() => {
+  const g = viewGrant.value
+  if (!g) return []
+
+  const result = []
+
+  result.push({
+    title: 'Grant Overview', icon: 'report-money', type: 'fields',
+    fields: [
+      { label: 'Grant Code', value: g.code, mono: true },
+      { label: 'Grant Name', value: g.name },
+      { label: 'Organization', value: g.organization },
+      { label: 'Status', value: g.status },
+      { label: 'End Date', value: g.end_date ? formatDate(g.end_date) : 'Open-ended', mono: !!g.end_date },
+      { label: 'Days Remaining', value: g.days_until_expiration != null ? `${g.days_until_expiration} days` : '—' },
+      { label: 'Hub Grant', value: g.is_hub_grant ? 'Yes' : 'No' },
+      { label: 'Items Count', value: String(g.grant_items_count ?? g.grant_items?.length ?? 0), mono: true },
+      ...(g.description ? [{ label: 'Description', value: g.description, fullWidth: true }] : []),
+    ],
+  })
+
+  if (g.grant_items?.length > 0) {
+    const items = g.grant_items
+    let totalLoe = 0, totalSalary = 0, totalBenefit = 0
+    items.forEach(item => {
+      totalLoe += Number(item.grant_level_of_effort) || 0
+      totalSalary += Number(item.grant_salary) || 0
+      totalBenefit += Number(item.grant_benefit) || 0
+    })
+
+    result.push({
+      title: 'Grant Items (Positions)', icon: 'list-details', type: 'table',
+      headers: ['#', 'Position', 'Budgetline', 'LOE', 'Salary', 'Benefit'],
+      aligns: { 0: 'text-center', 3: 'text-center', 4: 'text-right', 5: 'text-right' },
+      monoCols: [0, 2, 3, 4, 5],
+      rows: items.map(item => [
+        String(item.grant_position_number ?? '—'),
+        item.grant_position ?? '—',
+        item.budgetline_code ?? '—',
+        item.grant_level_of_effort != null ? String(item.grant_level_of_effort) : '—',
+        item.grant_salary != null ? formatCurrency(item.grant_salary) : '—',
+        item.grant_benefit != null ? formatCurrency(item.grant_benefit) : '—',
+      ]),
+      summary: {
+        label: `Total (${items.length} items)`,
+        colspan: 3,
+        values: [
+          totalLoe ? totalLoe.toFixed(2) : '—',
+          totalSalary ? formatCurrency(totalSalary) : '—',
+          totalBenefit ? formatCurrency(totalBenefit) : '—',
+        ],
+      },
+    })
+  }
+
+  result.push({
+    title: 'Record Information', icon: 'info-circle', type: 'fields',
+    fields: [
+      { label: 'Created By', value: g.created_by },
+      { label: 'Updated By', value: g.updated_by },
+      { label: 'Created At', value: formatDate(g.created_at), mono: true },
+      { label: 'Updated At', value: formatDate(g.updated_at), mono: true },
+    ],
+  })
+
+  return result
+})
+
+async function openView(record) {
+  viewGrant.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await grantApi.show(record.id)
+    viewGrant.value = data.data || data
+  } catch {
+    message.error('Failed to load grant details')
+    viewModalVisible.value = false
+  }
+  viewLoading.value = false
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const id = viewGrant.value?.id
+  viewModalVisible.value = false
+  if (id) {
+    const record = items.value.find(i => i.id === id)
+    if (record) openEdit(record)
+  }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Grants')
   fetchItems()
@@ -493,5 +653,93 @@ onMounted(() => {
   font-weight: 600;
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+/* ── Record View Modal ── */
+.view-loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 64px 0;
+}
+.view-modal-wrap {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.view-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.view-close-btn:hover {
+  background: rgba(255,255,255,0.35);
+  color: #fff;
+  transform: scale(1.08);
+}
+.view-close-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.6);
+  outline-offset: 2px;
+}
+</style>
+
+<!--
+  Unscoped: override Ant Design modal internals for record-view-modal.
+
+  Why these overrides are needed:
+  - global.less sets .ant-modal-content { overflow: hidden } which clips content
+  - Ant Design's centered modal uses flexbox on the wrap — we let the wrap scroll
+    naturally for tall content instead of constraining with max-height
+  - The RecordView component handles its own border-radius/shadow, so we strip
+    the Ant Design chrome (padding, background, box-shadow) from the modal shell
+-->
+<style>
+/* Wrap: let Ant's default overflow:auto handle scroll for tall modals */
+.record-view-modal .ant-modal-wrap {
+  overflow: auto;
+}
+
+/* Modal: breathing room from viewport edges */
+.record-view-modal .ant-modal {
+  padding: 24px 0;
+}
+
+/* Content: strip Ant chrome, override global overflow:hidden */
+.record-view-modal .ant-modal-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+  overflow: visible !important;
+}
+
+/* Body: no padding, RecordView fills the space */
+.record-view-modal .ant-modal-body {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Hide Ant's default header bar */
+.record-view-modal .ant-modal-header {
+  display: none !important;
+}
+
+/* Hide Ant's default close — we use our own inside the card */
+.record-view-modal .ant-modal-close {
+  display: none !important;
 }
 </style>

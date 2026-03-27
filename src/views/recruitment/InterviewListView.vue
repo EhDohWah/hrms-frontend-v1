@@ -71,11 +71,20 @@
           <template v-else-if="column.key === 'interviewer'">
             {{ record.interviewer_name || '—' }}
           </template>
+          <template v-else-if="column.key === 'score'">
+            <span v-if="record.score != null" class="font-mono">{{ Number(record.score).toFixed(0) }}</span>
+            <span v-else class="text-muted">—</span>
+          </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="statusColor(record.interview_status)" size="small">{{ record.interview_status || '—' }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'hired_status'">
+            <a-tag v-if="record.hired_status" :color="hiredColor(record.hired_status)" size="small">{{ record.hired_status }}</a-tag>
+            <span v-else class="text-muted">—</span>
+          </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
+              <a-button size="small" type="link" @click="openView(record)">View</a-button>
               <a-button v-if="authStore.canUpdate('interviews')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('interviews')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -156,10 +165,59 @@
         <a-form-item label="Interviewer(s)">
           <a-input v-model:value="form.interviewer_name" placeholder="e.g. John Smith, Jane Doe" />
         </a-form-item>
-        <a-form-item label="Notes">
-          <a-textarea v-model:value="form.feedback" placeholder="Enter notes" :rows="3" />
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Hired Status">
+              <a-select v-model:value="form.hired_status" allow-clear placeholder="Select status">
+                <a-select-option v-for="opt in hiredStatusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Score (0–100)">
+              <a-input-number v-model:value="form.score" :min="0" :max="100" :precision="2" placeholder="e.g. 85" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Feedback / Notes">
+          <a-textarea v-model:value="form.feedback" placeholder="Enter interview feedback or notes" :rows="3" />
+        </a-form-item>
+        <a-form-item label="Reference Info">
+          <a-textarea v-model:value="form.reference_info" placeholder="Enter reference information" :rows="2" />
         </a-form-item>
       </a-form>
+    </a-modal>
+
+    <!-- Interview Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewRecord" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :title="viewRecord.candidate_name"
+          icon="users"
+          badge="Interview Record"
+          :status="viewStatusKey"
+          :status-label="viewRecord.interview_status || 'Unknown'"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
     </a-modal>
   </div>
 </template>
@@ -173,6 +231,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
 import { interviewApi, lookupApi, optionsApi } from '@/api'
 import { formatDate } from '@/utils/formatters'
+import RecordView from '@/components/common/RecordView.vue'
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
@@ -191,10 +250,17 @@ const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const selectedRowKeys = ref([])
 const modalVisible = ref(false)
 const editingItem = ref(null)
+const hiredStatusOptions = [
+  { value: 'Hired', label: 'Hired' },
+  { value: 'Not Hired', label: 'Not Hired' },
+  { value: 'Pending', label: 'Pending' },
+]
+
 const form = reactive({
   candidate_name: '', phone: '',
   job_position: null, interview_date: null, start_time: null, end_time: null,
-  interview_mode: null, interviewer_name: '', interview_status: null, feedback: '',
+  interview_mode: null, interviewer_name: '', interview_status: null,
+  hired_status: null, score: null, feedback: '', reference_info: '',
 })
 
 const columns = [
@@ -202,8 +268,10 @@ const columns = [
   { title: 'Position', key: 'position', width: 180 },
   { title: 'Date & Time', key: 'interview_date', width: 180 },
   { title: 'Interviewer', key: 'interviewer', width: 160 },
+  { title: 'Score', key: 'score', width: 80, align: 'center' },
   { title: 'Status', key: 'status', width: 110, align: 'center' },
-  { title: '', key: 'actions', width: 140, align: 'right' },
+  { title: 'Hired', key: 'hired_status', width: 110, align: 'center' },
+  { title: '', key: 'actions', width: 160, align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -219,6 +287,11 @@ function formatTime(t) { return t ? t.substring(0, 5) : '' }
 
 function statusColor(status) {
   const map = { scheduled: 'blue', completed: 'green', cancelled: 'orange', terminated: 'red' }
+  return map[status?.toLowerCase()] || 'default'
+}
+
+function hiredColor(status) {
+  const map = { hired: 'green', 'not hired': 'red', pending: 'orange' }
   return map[status?.toLowerCase()] || 'default'
 }
 
@@ -262,7 +335,7 @@ function resetForm() {
     interview_mode: modeOptions.value[0]?.value || null,
     interviewer_name: '',
     interview_status: statusOptions.value[0]?.value || null,
-    feedback: '',
+    hired_status: null, score: null, feedback: '', reference_info: '',
   })
 }
 
@@ -284,7 +357,10 @@ function openEdit(record) {
     interview_mode: record.interview_mode || modeOptions.value[0]?.value || null,
     interviewer_name: record.interviewer_name || '',
     interview_status: record.interview_status || statusOptions.value[0]?.value || null,
+    hired_status: record.hired_status || null,
+    score: record.score != null ? Number(record.score) : null,
     feedback: record.feedback || '',
+    reference_info: record.reference_info || '',
   })
   modalVisible.value = true
 }
@@ -349,6 +425,112 @@ function handleBulkDelete() {
   })
 }
 
+// ---- Record View Modal ----
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewRecord = ref(null)
+
+const viewStatusKey = computed(() => {
+  const s = viewRecord.value?.interview_status?.toLowerCase()
+  const map = { scheduled: 'active', completed: 'active', cancelled: 'ending-soon', terminated: 'expired' }
+  return map[s] || 'active'
+})
+
+const viewStatusMeta = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const meta = []
+  if (r.interview_date) {
+    meta.push({ icon: 'calendar', text: formatDate(r.interview_date) })
+  }
+  if (r.start_time && r.end_time) {
+    meta.push({ icon: 'clock', text: `${formatTime(r.start_time)} – ${formatTime(r.end_time)}` })
+  }
+  if (r.interview_mode) {
+    meta.push({ icon: 'device-laptop', text: r.interview_mode })
+  }
+  if (r.hired_status) {
+    meta.push({ icon: 'briefcase', text: `Hired: ${r.hired_status}` })
+  }
+  return meta
+})
+
+const viewSections = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+
+  const result = []
+
+  // Candidate & Interview Details
+  result.push({
+    title: 'Interview Details', icon: 'users', type: 'fields',
+    fields: [
+      { label: 'Candidate', value: r.candidate_name },
+      { label: 'Phone', value: r.phone, mono: true },
+      { label: 'Position', value: r.job_position },
+      { label: 'Interview Mode', value: r.interview_mode },
+      { label: 'Date', value: formatDate(r.interview_date), mono: true },
+      { label: 'Time', value: r.start_time && r.end_time ? `${formatTime(r.start_time)} – ${formatTime(r.end_time)}` : null, mono: true },
+      { label: 'Interviewer(s)', value: r.interviewer_name },
+      { label: 'Status', value: r.interview_status },
+    ],
+  })
+
+  // Evaluation
+  const hasEval = r.score != null || r.hired_status || r.feedback || r.reference_info
+  if (hasEval) {
+    result.push({
+      title: 'Evaluation', icon: 'clipboard-check', type: 'fields',
+      fields: [
+        ...(r.score != null ? [{ label: 'Score', value: `${r.score} / 100`, mono: true }] : []),
+        ...(r.hired_status ? [{ label: 'Hired Status', value: r.hired_status }] : []),
+        ...(r.feedback ? [{ label: 'Feedback', value: r.feedback, fullWidth: true }] : []),
+        ...(r.reference_info ? [{ label: 'Reference Info', value: r.reference_info, fullWidth: true }] : []),
+      ],
+    })
+  }
+
+  // Record Information
+  result.push({
+    title: 'Record Information', icon: 'info-circle', type: 'fields',
+    fields: [
+      { label: 'Created By', value: r.created_by },
+      { label: 'Updated By', value: r.updated_by },
+      { label: 'Created At', value: formatDate(r.created_at), mono: true },
+      { label: 'Updated At', value: formatDate(r.updated_at), mono: true },
+    ],
+  })
+
+  return result
+})
+
+async function openView(record) {
+  viewRecord.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await interviewApi.show(record.id)
+    viewRecord.value = data.data || data
+  } catch {
+    message.error('Failed to load interview details')
+    viewModalVisible.value = false
+  }
+  viewLoading.value = false
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const id = viewRecord.value?.id
+  viewModalVisible.value = false
+  if (id) {
+    const record = items.value.find(i => i.id === id)
+    if (record) openEdit(record)
+  }
+}
+
 async function fetchLookups() {
   try {
     const [statusRes, modeRes, posRes] = await Promise.all([
@@ -389,4 +571,72 @@ onMounted(() => {
 .cell-name { font-weight: 600; font-size: 13.5px; }
 .cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .modal-form { margin-top: 16px; }
+
+/* ── Record View Modal ── */
+.view-loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 64px 0;
+}
+.view-modal-wrap {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.view-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.view-close-btn:hover {
+  background: rgba(255,255,255,0.35);
+  color: #fff;
+  transform: scale(1.08);
+}
+.view-close-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.6);
+  outline-offset: 2px;
+}
+</style>
+
+<!-- Unscoped: Ant modal chrome overrides for record-view-modal -->
+<style>
+.record-view-modal .ant-modal-wrap {
+  overflow: auto;
+}
+.record-view-modal .ant-modal {
+  padding: 24px 0;
+}
+.record-view-modal .ant-modal-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+  overflow: visible !important;
+}
+.record-view-modal .ant-modal-body {
+  padding: 0 !important;
+  background: transparent !important;
+}
+.record-view-modal .ant-modal-header {
+  display: none !important;
+}
+.record-view-modal .ant-modal-close {
+  display: none !important;
+}
 </style>

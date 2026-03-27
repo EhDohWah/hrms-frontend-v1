@@ -144,6 +144,12 @@ export const routes = [
         meta: { title: 'Training Detail', permission: 'training_list' },
       },
       {
+        path: 'training-types',
+        name: 'training-types',
+        component: () => import('@/views/training/TrainingTypeListView.vue'),
+        meta: { title: 'Training Types', permission: 'training_types' },
+      },
+      {
         path: 'employee-training',
         name: 'employee-training',
         component: () => import('@/views/training/EmployeeTrainingListView.vue'),

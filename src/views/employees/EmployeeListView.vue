@@ -153,7 +153,10 @@
           </template>
 
           <template v-else-if="column.key === 'actions'">
-            <a-button v-if="authStore.canEdit('employees')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+            <a-space>
+              <a-button size="small" type="link" @click="openView(record)">View</a-button>
+              <a-button v-if="authStore.canEdit('employees')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+            </a-space>
           </template>
         </template>
       </a-table>
@@ -197,6 +200,40 @@
         </div>
       </a-spin>
     </div>
+
+    <!-- Employee Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewEmployee" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :org="viewOrgConfig"
+          :title="viewDisplayName"
+          :ref-id="viewEmployee.staff_id"
+          icon="user"
+          badge="Employee Record"
+          :status="viewStatusKey"
+          :status-label="viewEmployee.status || 'Active'"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -208,13 +245,14 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { formatDate, genderLabel, calcAge } from '@/utils/formatters'
-import { ORGANIZATIONS, ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { formatDate, formatCurrency, genderLabel, calcAge, fmtFte } from '@/utils/formatters'
+import { ORGANIZATIONS, ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
 import { EMPLOYEE_STATUSES, STATUS_COLOR_MAP } from '@/constants/employeeStatuses'
 import {
   SearchOutlined, PlusOutlined, ExclamationCircleOutlined,
   TeamOutlined, LogoutOutlined, UserAddOutlined,
 } from '@ant-design/icons-vue'
+import RecordView from '@/components/common/RecordView.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -391,6 +429,302 @@ function handleBulkDelete() {
   })
 }
 
+// ---- Record View Modal ----
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewEmployee = ref(null)
+
+const viewOrgConfig = computed(() => ORG_RECORD_VIEW_CONFIG[viewEmployee.value?.organization] ?? null)
+
+const viewDisplayName = computed(() => {
+  const e = viewEmployee.value
+  if (!e) return ''
+  return [e.initial_en, e.first_name_en, e.last_name_en].filter(Boolean).join(' ') || 'Employee'
+})
+
+const viewStatusKey = computed(() => {
+  const e = viewEmployee.value
+  if (!e) return 'active'
+  const resignation = e.employment?.resignation
+  if (resignation?.acknowledgement_status === 'Approved') return 'expired'
+  if (resignation) return 'ending-soon'
+  return 'active'
+})
+
+const viewStatusMeta = computed(() => {
+  const e = viewEmployee.value
+  if (!e) return []
+  const meta = []
+  if (e.employment?.department?.name) {
+    meta.push({ icon: 'building', text: e.employment.department.name })
+  }
+  if (e.employment?.position?.title) {
+    meta.push({ icon: 'briefcase', text: e.employment.position.title })
+  }
+  if (e.employment?.start_date) {
+    meta.push({ icon: 'calendar', text: `Joined ${formatDate(e.employment.start_date)}` })
+  }
+  if (e.employment?.site?.name) {
+    meta.push({ icon: 'map-pin', text: e.employment.site.name })
+  }
+  return meta
+})
+
+const viewSections = computed(() => {
+  const e = viewEmployee.value
+  if (!e) return []
+
+  const result = []
+
+  // 1. Employee Profile (avatar + key fields)
+  const posTitle = e.employment?.position?.title
+  const fullName = [e.initial_en, e.first_name_en, e.last_name_en].filter(Boolean).join(' ') || 'Employee'
+
+  result.push({
+    title: 'Employee Profile', icon: 'user', type: 'avatar_fields',
+    initials: getInitials(e),
+    name: fullName,
+    subtitle: posTitle || null,
+    fields: [
+      { label: 'Staff ID', value: e.staff_id, mono: true },
+      { label: 'Organization', value: e.organization },
+      { label: 'Status', value: e.status },
+      { label: 'Gender', value: genderLabel(e.gender) },
+      { label: 'Date of Birth', value: formatDate(e.date_of_birth), mono: true },
+      { label: 'Age', value: e.date_of_birth ? `${calcAge(e.date_of_birth)} years` : null },
+    ],
+  })
+
+  // 2. Employment Details
+  if (e.employment) {
+    const emp = e.employment
+    result.push({
+      title: 'Employment', icon: 'briefcase', type: 'fields',
+      fields: [
+        { label: 'Department', value: emp.department?.name },
+        { label: 'Position', value: emp.position?.title },
+        { label: 'Section', value: emp.section_department?.name },
+        { label: 'Site', value: emp.site?.name },
+        { label: 'Start Date', value: formatDate(emp.start_date), mono: true },
+        { label: 'Pay Method', value: emp.pay_method },
+        { label: 'Probation Salary', value: formatCurrency(emp.probation_salary) },
+        { label: 'Post-Probation Salary', value: formatCurrency(emp.pass_probation_salary) },
+      ],
+    })
+  }
+
+  // 2b. Employment History (timeline)
+  if (e.employment) {
+    const emp = e.employment
+    const events = []
+
+    // Current employment
+    const startLabel = formatDate(emp.start_date)
+    events.push({
+      date: emp.end_date ? `${startLabel} — ${formatDate(emp.end_date)}` : `${startLabel} — Present`,
+      title: emp.position?.title || 'Employee',
+      detail: [emp.department?.name, emp.site?.name].filter(Boolean).join(' · ') || null,
+      status: emp.end_date ? 'past' : 'current',
+    })
+
+    // Transfer / employment history records (if backend provides them)
+    if (e.transfers?.length) {
+      e.transfers.forEach(t => {
+        const fromLabel = [t.from_department?.name, t.from_position?.title].filter(Boolean).join(' · ')
+        events.push({
+          date: formatDate(t.transfer_date || t.effective_date || t.created_at),
+          title: `Transferred — ${t.to_department?.name || t.to_position?.title || 'New Assignment'}`,
+          detail: fromLabel ? `From: ${fromLabel}` : t.reason || null,
+          status: 'past',
+        })
+      })
+    }
+
+    if (e.employment_histories?.length) {
+      e.employment_histories.forEach(h => {
+        events.push({
+          date: h.end_date ? `${formatDate(h.start_date)} — ${formatDate(h.end_date)}` : formatDate(h.start_date),
+          title: h.position?.title || h.position_title || 'Previous Role',
+          detail: [h.department?.name || h.department_name, h.site?.name || h.site_name].filter(Boolean).join(' · ') || null,
+          status: 'past',
+        })
+      })
+    }
+
+    result.push({
+      title: 'Employment History', icon: 'timeline', type: 'timeline',
+      events,
+    })
+  }
+
+  // 3. Personal Details
+  const thaiName = [e.initial_th, e.first_name_th, e.last_name_th].filter(Boolean).join(' ')
+  const personalFields = []
+  if (thaiName) personalFields.push({ label: 'Thai Name', value: thaiName })
+  if (e.nationality) personalFields.push({ label: 'Nationality', value: e.nationality })
+  if (e.religion) personalFields.push({ label: 'Religion', value: e.religion })
+  if (e.marital_status) personalFields.push({ label: 'Marital Status', value: e.marital_status })
+  if (e.military_status) personalFields.push({ label: 'Military Status', value: e.military_status })
+
+  if (personalFields.length > 0) {
+    result.push({
+      title: 'Personal Details', icon: 'id', type: 'fields',
+      fields: personalFields,
+    })
+  }
+
+  // 4. Identification
+  const idFields = []
+  if (e.identification_type) idFields.push({ label: 'ID Type', value: e.identification_type })
+  if (e.identification_number) idFields.push({ label: 'ID Number', value: e.identification_number, mono: true })
+  if (e.social_security_number) idFields.push({ label: 'SSN', value: e.social_security_number, mono: true })
+  if (e.tax_number) idFields.push({ label: 'Tax Number', value: e.tax_number, mono: true })
+  if (e.driver_license_number) idFields.push({ label: 'Driver License', value: e.driver_license_number, mono: true })
+
+  if (idFields.length > 0) {
+    result.push({
+      title: 'Identification', icon: 'id-badge-2', type: 'fields',
+      fields: idFields,
+    })
+  }
+
+  // 5. Contact Information
+  const contactFields = []
+  if (e.mobile_phone) contactFields.push({ label: 'Mobile Phone', value: e.mobile_phone, mono: true })
+  if (e.permanent_address) contactFields.push({ label: 'Permanent Address', value: e.permanent_address, fullWidth: true })
+  if (e.current_address) contactFields.push({ label: 'Current Address', value: e.current_address, fullWidth: true })
+  if (e.emergency_contact_person_name) {
+    contactFields.push({ label: 'Emergency Contact', value: e.emergency_contact_person_name })
+    contactFields.push({ label: 'Relationship', value: e.emergency_contact_person_relationship })
+    if (e.emergency_contact_person_phone) {
+      contactFields.push({ label: 'Emergency Phone', value: e.emergency_contact_person_phone, mono: true })
+    }
+  }
+
+  if (contactFields.length > 0) {
+    result.push({
+      title: 'Contact Information', icon: 'phone', type: 'fields',
+      fields: contactFields,
+    })
+  }
+
+  // 6. Funding Allocations table
+  if (e.employee_funding_allocations?.length > 0) {
+    result.push({
+      title: 'Funding Allocations', icon: 'report-money', type: 'table',
+      headers: ['Grant', 'Position', 'Budgetline', 'FTE', 'Amount'],
+      aligns: { 3: 'text-center', 4: 'text-right' },
+      monoCols: [2, 3, 4],
+      rows: e.employee_funding_allocations.map(fa => {
+        const gi = fa.grant_item || {}
+        const grant = gi.grant || {}
+        return [
+          grant.name || grant.code || '—',
+          gi.grant_position || '—',
+          gi.budgetline_code || '—',
+          fa.fte != null ? fmtFte(fa.fte) : '—',
+          fa.allocated_amount != null ? formatCurrency(fa.allocated_amount) : '—',
+        ]
+      }),
+    })
+  }
+
+  // 7. Education table
+  if (e.employee_education?.length > 0) {
+    result.push({
+      title: 'Education', icon: 'school', type: 'table',
+      headers: ['Degree', 'Institution', 'Field of Study', 'Start', 'End'],
+      aligns: {},
+      monoCols: [],
+      rows: e.employee_education.map(edu => [
+        edu.degree || edu.education_level || '—',
+        edu.institution || edu.school_name || '—',
+        edu.field_of_study || edu.major || '—',
+        formatDate(edu.start_date),
+        formatDate(edu.end_date),
+      ]),
+    })
+  }
+
+  // 8. Leave Balances
+  if (e.leave_balances?.length > 0) {
+    result.push({
+      title: 'Leave Balances', icon: 'calendar-stats', type: 'table',
+      headers: ['Leave Type', 'Total Days', 'Used', 'Remaining'],
+      aligns: { 1: 'text-center', 2: 'text-center', 3: 'text-center' },
+      monoCols: [1, 2, 3],
+      rows: e.leave_balances.map(lb => [
+        lb.leave_type?.name || '—',
+        lb.total_days != null ? String(lb.total_days) : '—',
+        lb.used_days != null ? String(lb.used_days) : '—',
+        lb.remaining_days != null ? String(lb.remaining_days) : '—',
+      ]),
+    })
+  }
+
+  // 9. Financial
+  const hasFinancial = e.bank_name || e.bank_branch || e.bank_account_name || e.bank_account_number
+  if (hasFinancial) {
+    result.push({
+      title: 'Financial', icon: 'building-bank', type: 'fields',
+      fields: [
+        { label: 'Bank Name', value: e.bank_name },
+        { label: 'Bank Branch', value: e.bank_branch },
+        { label: 'Account Name', value: e.bank_account_name },
+        { label: 'Account Number', value: e.bank_account_number, mono: true },
+      ],
+    })
+  }
+
+  // 10. Notes & Remarks
+  result.push({ title: 'Notes & Remarks', icon: 'notes', type: 'notes', content: e.remark || null })
+
+  // 11. Record Information
+  result.push({
+    title: 'Record Information', icon: 'info-circle', type: 'fields',
+    fields: [
+      { label: 'Created By', value: e.created_by },
+      { label: 'Updated By', value: e.updated_by },
+      { label: 'Created At', value: formatDate(e.created_at), mono: true },
+      { label: 'Updated At', value: formatDate(e.updated_at), mono: true },
+    ],
+  })
+
+  return result
+})
+
+const viewAbort = ref(null)
+
+async function openView(record) {
+  viewAbort.value?.abort()
+  viewAbort.value = new AbortController()
+  viewEmployee.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await employeeApi.show(record.id, { signal: viewAbort.value.signal })
+    viewEmployee.value = data.data || data
+  } catch (err) {
+    if (err.name !== 'CanceledError') {
+      message.error('Failed to load employee details')
+      viewModalVisible.value = false
+    }
+  }
+  viewLoading.value = false
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const id = viewEmployee.value?.id
+  viewModalVisible.value = false
+  if (id) {
+    router.push({ name: 'employee-detail', params: { id } })
+  }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Employees')
   fetchEmployees()
@@ -481,5 +815,73 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: center;
+}
+
+/* ── Record View Modal ── */
+.view-loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 64px 0;
+}
+.view-modal-wrap {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.view-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.view-close-btn:hover {
+  background: rgba(255,255,255,0.35);
+  color: #fff;
+  transform: scale(1.08);
+}
+.view-close-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.6);
+  outline-offset: 2px;
+}
+</style>
+
+<!-- Unscoped: Ant modal chrome overrides for record-view-modal -->
+<style>
+.record-view-modal .ant-modal-wrap {
+  overflow: auto;
+}
+.record-view-modal .ant-modal {
+  padding: 24px 0;
+}
+.record-view-modal .ant-modal-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+  overflow: visible !important;
+}
+.record-view-modal .ant-modal-body {
+  padding: 0 !important;
+  background: transparent !important;
+}
+.record-view-modal .ant-modal-header {
+  display: none !important;
+}
+.record-view-modal .ant-modal-close {
+  display: none !important;
 }
 </style>

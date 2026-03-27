@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'ant-design-vue/dist/reset.css'
+import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import '@/assets/fonts/fonts.css'
 import './styles/global.less'
 

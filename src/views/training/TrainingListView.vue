@@ -2,6 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <div class="page-header-stats">
+        <a-select
+          v-model:value="filters.year"
+          style="width: 100px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</a-select-option>
+        </a-select>
         <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
       </div>
       <div class="filter-bar">
@@ -16,6 +23,16 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <a-select
+          v-model:value="filters.training_type_id"
+          placeholder="Type"
+          allow-clear
+          class="filter-input"
+          style="width: 180px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="t in typeOptions" :key="t.id" :value="t.id">{{ t.name }}</a-select-option>
+        </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('training_list')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
@@ -43,6 +60,10 @@
               <span class="cell-name">{{ record.title }}</span>
             </router-link>
           </template>
+          <template v-else-if="column.key === 'training_type'">
+            <a-tag v-if="record.training_type" size="small">{{ record.training_type.name }}</a-tag>
+            <span v-else class="cell-sub">—</span>
+          </template>
           <template v-else-if="column.key === 'dates'">
             {{ formatDate(record.start_date) }} → {{ formatDate(record.end_date) }}
           </template>
@@ -65,11 +86,22 @@
       :width="'min(95vw, 560px)'"
     >
       <a-form :model="form" layout="vertical" class="modal-form">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Training Type">
+              <a-select v-model:value="form.training_type_id" placeholder="Select type" allow-clear>
+                <a-select-option v-for="t in typeOptions" :key="t.id" :value="t.id">{{ t.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Organizer" required>
+              <a-input v-model:value="form.organizer" placeholder="Enter organizer name" />
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-form-item label="Title" required>
           <a-input v-model:value="form.title" placeholder="Enter training title" />
-        </a-form-item>
-        <a-form-item label="Organizer" required>
-          <a-input v-model:value="form.organizer" placeholder="Enter organizer name" />
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -104,20 +136,25 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
 
+const typeOptions = ref([])
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
 const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
+const filters = reactive({ year: currentYear, training_type_id: undefined })
 const pagination = reactive({ current_page: 1, per_page: PAGINATION_DEFAULTS.perPage, total: 0 })
 const selectedRowKeys = ref([])
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
-  title: '', organizer: '', start_date: null, end_date: null,
+  training_type_id: null, title: '', organizer: '', start_date: null, end_date: null,
 })
 
 const columns = [
   { title: 'Title', key: 'title', width: 260 },
+  { title: 'Type', key: 'training_type', width: 160 },
   { title: 'Organizer', dataIndex: 'organizer', width: 200 },
   { title: 'Period', key: 'dates', width: 260 },
   { title: '', key: 'actions', width: 140, align: 'right' },
@@ -139,6 +176,8 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       search: search.value || null,
+      filter_year: filters.year || null,
+      filter_training_type_id: filters.training_type_id || null,
     })
     const { data } = await trainingApi.list(params, { signal: getSignal() })
     items.value = data.data || []
@@ -163,7 +202,7 @@ function handleTableChange(pag) {
 
 function resetForm() {
   Object.assign(form, {
-    title: '', organizer: '', start_date: null, end_date: null,
+    training_type_id: null, title: '', organizer: '', start_date: null, end_date: null,
   })
 }
 
@@ -176,6 +215,7 @@ function openCreate() {
 function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
+    training_type_id: record.training_type_id || null,
     title: record.title || '',
     organizer: record.organizer || '',
     start_date: record.start_date || null,
@@ -248,8 +288,16 @@ function handleBulkDelete() {
   })
 }
 
+async function fetchTypeOptions() {
+  try {
+    const { data } = await trainingApi.typeOptions()
+    typeOptions.value = data.data || []
+  } catch { /* silent */ }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Training')
+  fetchTypeOptions()
   fetchItems()
 })
 </script>

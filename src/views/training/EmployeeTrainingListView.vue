@@ -1,22 +1,57 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <div class="page-header-stats">
-        <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
-      </div>
       <div class="filter-bar">
+        <a-select
+          v-model:value="filters.year"
+          placeholder="Year"
+          allow-clear
+          style="width: 110px"
+          @change="onFilterChange"
+        >
+          <a-select-option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.organization"
+          placeholder="Organization"
+          allow-clear
+          style="width: 150px"
+          @change="onFilterChange"
+        >
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.training_id"
+          placeholder="Training"
+          allow-clear
+          show-search
+          :options="trainingDropdownOptions"
+          :filter-option="(input, opt) => opt.label.toLowerCase().includes(input.toLowerCase())"
+          style="width: 220px"
+          @change="onFilterChange"
+        />
         <a-select
           v-model:value="filters.status"
           placeholder="Status"
           allow-clear
-          class="filter-input"
-          style="width: 160px"
+          style="width: 140px"
           @change="onFilterChange"
         >
           <a-select-option v-for="s in ENROLLMENT_STATUSES" :key="s.value" :value="s.value">{{ s.label }}</a-select-option>
         </a-select>
+        <a-input-search
+          v-model:value="filters.search"
+          placeholder="Search name, ID, training..."
+          allow-clear
+          style="width: 240px"
+          @search="onFilterChange"
+          @pressEnter="onFilterChange"
+        />
+      </div>
+      <div class="page-header-actions">
+        <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('employee_training')" danger @click="handleBulkDelete">
-          Delete {{ selectedRowKeys.length }} Selected
+          Delete {{ selectedRowKeys.length }}
         </a-button>
         <a-button v-if="authStore.canCreate('employee_training')" type="primary" @click="openCreate">
           <PlusOutlined /> Enroll Employee
@@ -37,11 +72,17 @@
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'employee'">
-            <div class="cell-employee">
-              <span class="cell-name">{{ record.employee?.first_name_en }} {{ record.employee?.last_name_en }}</span>
-              <span class="cell-sub font-mono">{{ record.employee?.staff_id }}</span>
-            </div>
+          <template v-if="column.key === 'organization'">
+            <a-tag :color="getOrgColor(record.employee?.organization)" size="small">{{ record.employee?.organization || '—' }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'staff_id'">
+            <span class="font-mono">{{ record.employee?.staff_id || '—' }}</span>
+          </template>
+          <template v-else-if="column.key === 'staff_name'">
+            <span class="cell-name">{{ record.employee?.first_name_en }} {{ record.employee?.last_name_en }}</span>
+          </template>
+          <template v-else-if="column.key === 'gender'">
+            {{ genderLabel(record.employee?.gender) }}
           </template>
           <template v-else-if="column.key === 'training'">
             <router-link
@@ -49,7 +90,7 @@
               :to="{ name: 'training-detail', params: { id: record.training.id } }"
               class="cell-link"
             >
-              <span class="cell-name">{{ record.training?.title }}</span>
+              {{ record.training?.title }}
             </router-link>
             <span v-else>{{ record.training?.title || '—' }}</span>
           </template>
@@ -58,9 +99,6 @@
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="getEnrollmentStatusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
-          </template>
-          <template v-else-if="column.key === 'enrolled_at'">
-            {{ formatDate(record.created_at) }}
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
@@ -133,10 +171,11 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeTrainingApi, employeeApi, trainingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { formatDate } from '@/utils/formatters'
+import { formatDate, genderLabel } from '@/utils/formatters'
 import { cleanParams } from '@/utils/helpers'
 import { PAGINATION_DEFAULTS } from '@/constants/config'
 import { ENROLLMENT_STATUSES, getEnrollmentStatusColor } from '@/constants/training'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -145,7 +184,13 @@ const getSignal = useAbortController()
 const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
-const filters = reactive({ status: undefined })
+const filters = reactive({
+  year: new Date().getFullYear(),
+  organization: undefined,
+  training_id: undefined,
+  status: undefined,
+  search: '',
+})
 const pagination = reactive({ current_page: 1, per_page: PAGINATION_DEFAULTS.perPage, total: 0 })
 const selectedRowKeys = ref([])
 const modalVisible = ref(false)
@@ -165,14 +210,20 @@ const trainingOptions = ref([])
 const trainingSearching = ref(false)
 let trainingSearchTimer = null
 
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
+const trainingDropdownOptions = ref([])
+
 const columns = [
-  { title: 'Employee', key: 'employee', width: 220 },
+  { title: 'Organization', key: 'organization', width: 110, align: 'center' },
+  { title: 'Staff ID', key: 'staff_id', width: 120 },
+  { title: 'Staff Name', key: 'staff_name', width: 190 },
+  { title: 'Gender', key: 'gender', width: 90, align: 'center' },
   { title: 'Training', key: 'training', width: 220 },
   { title: 'Organizer', dataIndex: ['training', 'organizer'], width: 160 },
-  { title: 'Period', key: 'period', width: 260 },
-  { title: 'Status', key: 'status', width: 130, align: 'center' },
-  { title: 'Enrolled On', key: 'enrolled_at', width: 140 },
-  { title: '', key: 'actions', width: 150, align: 'right' },
+  { title: 'Period', key: 'period', width: 240 },
+  { title: 'Status', key: 'status', width: 110, align: 'center' },
+  { title: '', key: 'actions', width: 140, align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -190,7 +241,11 @@ async function fetchItems() {
     const params = cleanParams({
       page: pagination.current_page,
       per_page: pagination.per_page,
+      filter_year: filters.year || null,
+      filter_organization: filters.organization || null,
+      filter_training_id: filters.training_id || null,
       filter_status: filters.status || null,
+      search: filters.search || null,
     })
     const { data } = await employeeTrainingApi.list(params, { signal: getSignal() })
     items.value = data.data || []
@@ -347,9 +402,17 @@ function handleBulkDelete() {
   })
 }
 
+async function fetchTrainingDropdownOptions() {
+  try {
+    const { data } = await trainingApi.options()
+    trainingDropdownOptions.value = (data.data || []).map(t => ({ value: t.id, label: t.title }))
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Employee Training')
   fetchItems()
+  fetchTrainingDropdownOptions()
 })
 
 onUnmounted(() => {
@@ -362,21 +425,29 @@ onUnmounted(() => {
 .page-header {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 12px;
   margin-bottom: 16px;
 }
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
   .page-header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
 }
-.page-header-stats { display: flex; gap: 6px; }
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.page-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
 .cell-link { text-decoration: none; color: inherit; }
-.cell-employee { display: flex; flex-direction: column; }
 .cell-name { font-weight: 600; font-size: 14px; }
-.cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .modal-form { margin-top: 16px; }
 </style>

@@ -24,12 +24,7 @@
           style="width: 160px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="Pending">Pending</a-select-option>
-          <a-select-option value="Accepted">Accepted</a-select-option>
-          <a-select-option value="Declined">Declined</a-select-option>
-          <a-select-option value="Expired">Expired</a-select-option>
-          <a-select-option value="Withdrawn">Withdrawn</a-select-option>
-          <a-select-option value="Under Review">Under Review</a-select-option>
+          <a-select-option v-for="opt in acceptanceStatusOptions" :key="opt.value" :value="opt.value">{{ opt.value }}</a-select-option>
         </a-select>
         <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('job_offers')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
@@ -73,11 +68,10 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-tooltip title="Download PDF">
-                <a-button size="small" type="link" :loading="downloadingId === record.id" @click="handleDownloadPdf(record)">
-                  <template #icon><FilePdfOutlined /></template>
-                </a-button>
-              </a-tooltip>
+              <a-button size="small" type="link" :loading="previewLoadingId === record.id" @click="openPdfPreview(record)">
+                <template #icon><EyeOutlined /></template>
+                Preview
+              </a-button>
               <a-button v-if="authStore.canUpdate('job_offers')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('job_offers')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -133,12 +127,7 @@
         </a-row>
         <a-form-item label="Acceptance Status" required>
           <a-select v-model:value="form.acceptance_status" placeholder="Select status">
-            <a-select-option value="Pending">Pending</a-select-option>
-            <a-select-option value="Accepted">Accepted</a-select-option>
-            <a-select-option value="Declined">Declined</a-select-option>
-            <a-select-option value="Expired">Expired</a-select-option>
-            <a-select-option value="Withdrawn">Withdrawn</a-select-option>
-            <a-select-option value="Under Review">Under Review</a-select-option>
+            <a-select-option v-for="opt in acceptanceStatusOptions" :key="opt.value" :value="opt.value">{{ opt.value }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="Note" required>
@@ -146,22 +135,73 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- PDF Preview Modal -->
+    <a-modal
+      v-model:open="pdfPreviewVisible"
+      :footer="null"
+      :width="'min(95vw, 860px)'"
+      :body-style="{ padding: 0 }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="pdf-preview-modal"
+      centered
+    >
+      <div class="pdf-viewer">
+        <div class="pdf-toolbar">
+          <div class="pdf-toolbar-info">
+            <FilePdfOutlined class="pdf-toolbar-icon" />
+            <div>
+              <div class="pdf-toolbar-title">{{ previewRecord?.candidate_name }}</div>
+              <div class="pdf-toolbar-sub">{{ previewRecord?.position_name }} &middot; {{ formatDate(previewRecord?.date) }}</div>
+            </div>
+            <a-tag v-if="previewRecord?.acceptance_status" :color="statusColor(previewRecord.acceptance_status)" size="small" style="margin-left: 8px">
+              {{ previewRecord.acceptance_status }}
+            </a-tag>
+          </div>
+          <div class="pdf-toolbar-actions">
+            <a-button size="small" @click="handleDownloadFromPreview">
+              <DownloadOutlined /> Download
+            </a-button>
+            <a-button size="small" @click="closePdfPreview">
+              Close
+            </a-button>
+          </div>
+        </div>
+        <div class="pdf-frame-wrap">
+          <div v-if="pdfLoading" class="pdf-loading">
+            <a-spin tip="Loading PDF..." />
+          </div>
+          <iframe
+            v-else-if="pdfUrl"
+            :src="pdfUrl"
+            class="pdf-iframe"
+            title="Job Offer PDF Preview"
+          />
+          <div v-else class="pdf-error">
+            <a-empty description="Failed to load PDF" />
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, createVNode } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined, FilePdfOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined, FilePdfOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
-import { jobOfferApi, reportApi } from '@/api'
+import { jobOfferApi, reportApi, lookupApi } from '@/api'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
+
+const acceptanceStatusOptions = ref([])
 
 const items = ref([])
 const loading = ref(false)
@@ -170,7 +210,12 @@ const search = ref('')
 const filters = reactive({ status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const selectedRowKeys = ref([])
-const downloadingId = ref(null)
+const previewLoadingId = ref(null)
+const pdfPreviewVisible = ref(false)
+const pdfLoading = ref(false)
+const pdfUrl = ref(null)
+const pdfBlob = ref(null)
+const previewRecord = ref(null)
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
@@ -250,7 +295,7 @@ function resetForm() {
     pass_probation_salary: null,
     date: null,
     acceptance_deadline: null,
-    acceptance_status: 'Pending',
+    acceptance_status: acceptanceStatusOptions.value[0]?.value || 'Pending',
     note: '',
   })
 }
@@ -303,16 +348,49 @@ async function handleSave() {
   saving.value = false
 }
 
-async function handleDownloadPdf(record) {
-  downloadingId.value = record.id
+async function openPdfPreview(record) {
+  previewRecord.value = record
+  pdfUrl.value = null
+  pdfBlob.value = null
+  pdfLoading.value = true
+  pdfPreviewVisible.value = true
+  previewLoadingId.value = record.id
   try {
     const res = await jobOfferApi.pdf(record.custom_offer_id)
-    reportApi.downloadBlob(res, `job-offer-${record.candidate_name || record.id}.pdf`)
+    pdfBlob.value = res
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    pdfUrl.value = URL.createObjectURL(blob)
   } catch {
-    message.error('Failed to download PDF')
+    message.error('Failed to load PDF')
   }
-  downloadingId.value = null
+  pdfLoading.value = false
+  previewLoadingId.value = null
 }
+
+function closePdfPreview() {
+  pdfPreviewVisible.value = false
+  if (pdfUrl.value) {
+    URL.revokeObjectURL(pdfUrl.value)
+    pdfUrl.value = null
+  }
+  pdfBlob.value = null
+  previewRecord.value = null
+}
+
+function handleDownloadFromPreview() {
+  if (pdfBlob.value && previewRecord.value) {
+    reportApi.downloadBlob(pdfBlob.value, `job-offer-${previewRecord.value.candidate_name || previewRecord.value.id}.pdf`)
+  }
+}
+
+// Cleanup blob URL when modal closes via any method (backdrop, button, etc.)
+watch(pdfPreviewVisible, (open) => {
+  if (!open) closePdfPreview()
+})
+
+onBeforeUnmount(() => {
+  if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value)
+})
 
 function handleDelete(record) {
   Modal.confirm({
@@ -354,8 +432,16 @@ function handleBulkDelete() {
   })
 }
 
+async function fetchLookups() {
+  try {
+    const res = await lookupApi.byType('job_offer_acceptance_status')
+    acceptanceStatusOptions.value = res.data?.data || []
+  } catch { /* silent — dropdown falls back to empty */ }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Job Offers')
+  fetchLookups()
   fetchItems()
 })
 </script>
@@ -378,4 +464,95 @@ onMounted(() => {
 .page-header-stats { display: flex; gap: 6px; }
 .cell-name { font-weight: 600; font-size: 13.5px; }
 .modal-form { margin-top: 16px; }
+
+/* ── PDF Viewer ── */
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: calc(90vh - 48px);
+  min-height: 400px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #525659;
+}
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-primary);
+  color: #fff;
+  flex-shrink: 0;
+}
+.pdf-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pdf-toolbar-icon {
+  font-size: 20px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.pdf-toolbar-title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-toolbar-sub {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-toolbar-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.pdf-frame-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+.pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.pdf-loading,
+.pdf-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #f4f5f6;
+}
+</style>
+
+<!-- Unscoped: Ant modal overrides for PDF preview -->
+<style>
+.pdf-preview-modal .ant-modal {
+  padding: 24px 0;
+}
+.pdf-preview-modal .ant-modal-content {
+  padding: 0 !important;
+  overflow: hidden;
+  border-radius: 10px !important;
+}
+.pdf-preview-modal .ant-modal-body {
+  padding: 0 !important;
+}
+.pdf-preview-modal .ant-modal-header {
+  display: none !important;
+}
+.pdf-preview-modal .ant-modal-close {
+  display: none !important;
+}
 </style>

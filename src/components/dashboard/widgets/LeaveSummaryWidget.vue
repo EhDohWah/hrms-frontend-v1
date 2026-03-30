@@ -68,10 +68,10 @@ onMounted(async () => {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.leave-stat-value.pending { color: #d97706; }
-.leave-stat-value.approved { color: #16a34a; }
-.leave-stat-value.declined { color: #dc2626; }
-.leave-stat-value.on-leave { color: #2563eb; }
+.leave-stat-value.pending { color: var(--color-warning); }
+.leave-stat-value.approved { color: var(--color-success); }
+.leave-stat-value.declined { color: var(--color-danger); }
+.leave-stat-value.on-leave { color: var(--color-accent); }
 .leave-stat-label { font-size: 11px; color: var(--color-text-secondary); }
 .leave-total {
   margin-top: 12px;

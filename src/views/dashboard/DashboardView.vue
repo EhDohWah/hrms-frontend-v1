@@ -92,9 +92,6 @@
             Notifications
           </span>
         </template>
-        <template #extra>
-          <router-link to="/notifications" class="see-all-link">See all</router-link>
-        </template>
         <SystemNotificationsWidget />
       </a-card>
     </div>
@@ -152,8 +149,8 @@ const getSignal = useAbortController()
 // ── Permission gates ──────────────────────────────────────
 const can = computed(() => ({
   employees: auth.canRead('employees'),
-  leave: auth.canRead('leaves_admin'),
-  payroll: auth.canRead('employee_salary'),
+  leave: auth.canRead('leave_requests'),
+  payroll: auth.canRead('employee_salaries'),
   recruitment: auth.canRead('interviews') || auth.canRead('job_offers'),
 }))
 
@@ -194,14 +191,14 @@ const tourSteps = computed(() => {
   // Sidebar sections — only include steps for sections the user can see.
   // Each entry mirrors the permission check in AppSidebar's visibleSections.
   const sidebarSteps = [
-    { perms: ['grants_list'], title: 'Grants', description: 'Manage grant funding, track grant periods, and oversee grant-funded positions. View active grants and their budget allocations.', key: 'grants-menu' },
+    { perms: ['grants'], title: 'Grants', description: 'Manage grant funding, track grant periods, and oversee grant-funded positions. View active grants and their budget allocations.', key: 'grants-menu' },
     { perms: ['interviews', 'job_offers'], title: 'Recruitment', description: 'Run your hiring pipeline — schedule and score interviews, then convert candidates into job offers with a few clicks.', key: 'recruitment-menu' },
-    { perms: ['employees', 'employee_salary'], title: 'Management', description: 'Your core HR hub. View all employee records, manage employment details, and process monthly payroll from here.', key: 'management-menu' },
-    { perms: ['leaves_admin', 'leave_balances', 'leave_types'], title: 'Leave', description: 'Submit, review, and approve leave requests. Monitor employee leave balances and configure leave types for your organization.', key: 'leave-menu' },
-    { perms: ['attendance_admin', 'holidays'], title: 'Attendance', description: 'Track daily attendance records and manage the holiday calendar for your sites.', key: 'attendance-menu' },
-    { perms: ['training_list', 'employee_training'], title: 'Training', description: 'Organize training programs and track which employees have been enrolled or completed their courses.', key: 'training-menu' },
-    { perms: ['personnel_actions', 'transfer', 'resignation'], title: 'HRM', description: 'Handle personnel actions like promotions and salary changes, process employee transfers, and manage resignations.', key: 'hrm-menu' },
-    { perms: ['report_list'], title: 'Reports', description: 'Generate and export HR reports — headcount, payroll summaries, leave usage, and more.', key: 'reports-menu' },
+    { perms: ['employees', 'employee_salaries'], title: 'Management', description: 'Your core HR hub. View all employee records, manage employment details, and process monthly payroll from here.', key: 'management-menu' },
+    { perms: ['leave_requests', 'leave_balances', 'leave_types'], title: 'Leave', description: 'Submit, review, and approve leave requests. Monitor employee leave balances and configure leave types for your organization.', key: 'leave-menu' },
+    { perms: ['attendance', 'holidays'], title: 'Attendance', description: 'Track daily attendance records and manage the holiday calendar for your sites.', key: 'attendance-menu' },
+    { perms: ['trainings', 'employee_training'], title: 'Training', description: 'Organize training programs and track which employees have been enrolled or completed their courses.', key: 'training-menu' },
+    { perms: ['personnel_actions', 'transfers', 'resignations'], title: 'HRM', description: 'Handle personnel actions like promotions and salary changes, process employee transfers, and manage resignations.', key: 'hrm-menu' },
+    { perms: ['reports'], title: 'Reports', description: 'Generate and export HR reports — headcount, payroll summaries, leave usage, and more.', key: 'reports-menu' },
     { perms: ['employees'], title: 'Data Management', description: 'Bulk import employee data from spreadsheets to save time during initial setup or migrations.', key: 'data-management-menu' },
     { perms: ['sites', 'departments', 'positions'], title: 'Organization', description: 'Define your organizational structure — sites (locations), departments, and job positions.', key: 'organization-menu' },
     { perms: ['benefit_settings', 'tax_settings', 'payroll_items'], title: 'Settings', description: 'Configure benefits, tax brackets, tax calculation rules, and payroll policies that apply across the system.', key: 'settings-menu' },

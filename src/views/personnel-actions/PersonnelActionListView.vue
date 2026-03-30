@@ -98,13 +98,13 @@
             <a-space>
               <a-button size="small" type="link" @click="openDetail(record)">View</a-button>
               <a-button
-                v-if="canUpdate && !record.implemented_at"
+                v-if="canUpdate"
                 size="small"
                 type="link"
                 @click="openEdit(record)"
               >Edit</a-button>
               <a-button
-                v-if="canDelete && !record.implemented_at"
+                v-if="canDelete"
                 size="small"
                 type="link"
                 danger
@@ -202,20 +202,7 @@
           <div class="section-title">Section 3: New Information</div>
           <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
-              <a-form-item label="Position">
-                <a-select
-                  v-model:value="form.new_position_id"
-                  placeholder="Select position"
-                  allow-clear
-                  show-search
-                  :filter-option="filterOption"
-                >
-                  <a-select-option v-for="p in filteredPositions" :key="p.id" :value="p.id">{{ p.title }}</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :xs="24" :sm="8">
-              <a-form-item label="Location (Site)">
+              <a-form-item label="Site">
                 <a-select
                   v-model:value="form.new_site_id"
                   placeholder="Select site"
@@ -227,13 +214,6 @@
                 </a-select>
               </a-form-item>
             </a-col>
-            <a-col :xs="24" :sm="8">
-              <a-form-item label="Work Schedule">
-                <a-input v-model:value="form.new_work_schedule" placeholder="e.g. Full Time" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
               <a-form-item label="Department">
                 <a-select
@@ -249,10 +229,10 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="8">
-              <a-form-item label="Sub-Department">
+              <a-form-item label="Section Department">
                 <a-select
                   v-model:value="form.new_section_department_id"
-                  placeholder="Select sub-department"
+                  placeholder="Select section"
                   allow-clear
                   show-search
                   :filter-option="filterOption"
@@ -261,30 +241,21 @@
                 </a-select>
               </a-form-item>
             </a-col>
-            <a-col :xs="24" :sm="8">
-              <a-form-item label="Report To">
-                <a-input v-model:value="form.new_report_to" placeholder="Supervisor name" />
-              </a-form-item>
-            </a-col>
           </a-row>
           <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
-              <a-form-item label="Pay Plan">
-                <a-input v-model:value="form.new_pay_plan" placeholder="Pay plan" />
+              <a-form-item label="Position">
+                <a-select
+                  v-model:value="form.new_position_id"
+                  placeholder="Select position"
+                  allow-clear
+                  show-search
+                  :filter-option="filterOption"
+                >
+                  <a-select-option v-for="p in filteredPositions" :key="p.id" :value="p.id">{{ p.title }}</a-select-option>
+                </a-select>
               </a-form-item>
             </a-col>
-            <a-col :xs="24" :sm="8">
-              <a-form-item label="Phone Ext">
-                <a-input v-model:value="form.new_phone_ext" placeholder="Phone ext" />
-              </a-form-item>
-            </a-col>
-            <a-col :xs="24" :sm="8">
-              <a-form-item label="New Email">
-                <a-input v-model:value="form.new_email" placeholder="Email address" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-row :gutter="16">
             <a-col :xs="24" :sm="8">
               <a-form-item label="Salary">
                 <a-input-number
@@ -308,6 +279,23 @@
               </a-form-item>
             </a-col>
           </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="8">
+              <a-form-item label="Work Schedule">
+                <a-input v-model:value="form.new_work_schedule" placeholder="e.g. Full Time" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="8">
+              <a-form-item label="Pay Plan">
+                <a-input v-model:value="form.new_pay_plan" placeholder="Pay plan" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="8">
+              <a-form-item label="Phone Ext">
+                <a-input v-model:value="form.new_phone_ext" placeholder="Phone ext" />
+              </a-form-item>
+            </a-col>
+          </a-row>
           <a-form-item label="Acknowledged By (Name and Signature from paper form)">
             <a-input v-model:value="form.acknowledged_by" placeholder="Name from paper form" />
           </a-form-item>
@@ -327,6 +315,7 @@
           <div class="approval-form-grid">
             <div v-for="a in approvalFields" :key="a.key" class="approval-form-item">
               <span class="approval-form-label">{{ a.label }}</span>
+              <span v-if="a.labelTh" class="approval-form-label-th">{{ a.labelTh }}</span>
               <a-switch
                 v-model:checked="form[a.key]"
                 checked-children="Yes"
@@ -419,6 +408,7 @@
         <div class="approval-grid">
           <div v-for="a in approvalFields" :key="a.key" class="approval-item">
             <span class="approval-label">{{ a.label }}</span>
+            <span v-if="a.labelTh" class="approval-label-th">{{ a.labelTh }}</span>
             <a-switch
               :checked="detailItem[a.key]"
               :disabled="!!detailItem.implemented_at || !canUpdate"
@@ -501,10 +491,8 @@ const form = reactive({
   new_salary: null,
   new_probation_salary: null,
   new_work_schedule: '',
-  new_report_to: '',
   new_pay_plan: '',
   new_phone_ext: '',
-  new_email: '',
   comments: '',
   dept_head_approved: false,
   coo_approved: false,
@@ -523,10 +511,10 @@ const approvingKey = ref(null)
 
 // ======================== Constants ========================
 const approvalFields = [
-  { key: 'dept_head_approved', dateKey: 'dept_head_approved_date', label: 'Department Head', type: 'dept_head' },
-  { key: 'coo_approved', dateKey: 'coo_approved_date', label: 'COO', type: 'coo' },
-  { key: 'hr_approved', dateKey: 'hr_approved_date', label: 'HR', type: 'hr' },
-  { key: 'accountant_approved', dateKey: 'accountant_approved_date', label: 'Accountant', type: 'accountant' },
+  { key: 'dept_head_approved', dateKey: 'dept_head_approved_date', label: 'Dept. Head / Supervisor', labelTh: 'หัวหน้าแผนก', type: 'dept_head' },
+  { key: 'coo_approved', dateKey: 'coo_approved_date', label: 'COO of SMRU', labelTh: 'ผู้จัดการหน่วยวิจัยมาลาเรียโซโกล', type: 'coo' },
+  { key: 'hr_approved', dateKey: 'hr_approved_date', label: 'Human Resources Manager', labelTh: 'ผู้จัดการฝ่ายบุคคล', type: 'hr' },
+  { key: 'accountant_approved', dateKey: 'accountant_approved_date', label: 'Accountant Manager', labelTh: '', type: 'accountant' },
 ]
 
 const columns = [
@@ -562,7 +550,8 @@ const tablePagination = computed(() => ({
 
 const filteredPositions = computed(() => {
   if (!form.new_department_id) return positions.value
-  return positions.value.filter((p) => p.department_id === form.new_department_id)
+  const deptId = Number(form.new_department_id)
+  return positions.value.filter((p) => Number(p.department_id) === deptId)
 })
 
 const filteredSectionDepartments = computed(() => {
@@ -760,10 +749,8 @@ function resetForm() {
     new_salary: null,
     new_probation_salary: null,
     new_work_schedule: '',
-    new_report_to: '',
     new_pay_plan: '',
     new_phone_ext: '',
-    new_email: '',
     comments: '',
     dept_head_approved: false,
     coo_approved: false,
@@ -800,10 +787,8 @@ function openEdit(record) {
     new_salary: record.new_salary ? Number(record.new_salary) : null,
     new_probation_salary: record.new_probation_salary ? Number(record.new_probation_salary) : null,
     new_work_schedule: record.new_work_schedule || '',
-    new_report_to: record.new_report_to || '',
     new_pay_plan: record.new_pay_plan || '',
     new_phone_ext: record.new_phone_ext || '',
-    new_email: record.new_email || '',
     comments: record.comments || '',
     dept_head_approved: !!record.dept_head_approved,
     coo_approved: !!record.coo_approved,
@@ -1048,6 +1033,13 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
+  text-align: center;
+}
+.approval-form-label-th {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: -4px;
 }
 
 /* Detail modal */
@@ -1065,7 +1057,7 @@ onUnmounted(() => {
   gap: 12px;
 }
 @media (min-width: 640px) {
-  .approval-grid { grid-template-columns: repeat(4, 1fr); }
+  .approval-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .approval-item {
   display: flex;
@@ -1080,6 +1072,13 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
+  text-align: center;
+}
+.approval-label-th {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: -2px;
 }
 .approval-date {
   font-size: 11px;

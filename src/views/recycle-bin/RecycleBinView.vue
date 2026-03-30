@@ -32,7 +32,7 @@
           </a-select-option>
         </a-select>
         <a-button
-          v-if="selectedRowKeys.length > 0 && authStore.canUpdate('recycle_bin_list')"
+          v-if="selectedRowKeys.length > 0 && authStore.canUpdate('recycle_bin')"
           type="primary"
           @click="handleBulkRestore"
           :loading="restoring"
@@ -40,7 +40,7 @@
           <UndoOutlined /> Restore {{ selectedRowKeys.length }} Selected
         </a-button>
         <a-button
-          v-if="selectedRowKeys.length > 0 && authStore.canDelete('recycle_bin_list')"
+          v-if="selectedRowKeys.length > 0 && authStore.canDelete('recycle_bin')"
           danger
           @click="handleBulkDelete"
           :loading="deleting"
@@ -57,7 +57,7 @@
         :data-source="filteredItems"
         :loading="loading"
         :row-key="rowKey"
-        :row-selection="authStore.canUpdate('recycle_bin_list') || authStore.canDelete('recycle_bin_list') ? rowSelection : undefined"
+        :row-selection="authStore.canUpdate('recycle_bin') || authStore.canDelete('recycle_bin') ? rowSelection : undefined"
         :scroll="{ x: 'max-content' }"
         size="middle"
         :pagination="{
@@ -89,8 +89,8 @@
 
           <template v-else-if="column.key === 'actions'">
             <a-space :size="0">
-              <a-button v-if="authStore.canUpdate('recycle_bin_list')" size="small" type="link" @click="handleRestore(record)">Restore</a-button>
-              <a-button v-if="authStore.canDelete('recycle_bin_list')" size="small" type="link" danger @click="handlePermanentDelete(record)">Delete</a-button>
+              <a-button v-if="authStore.canUpdate('recycle_bin')" size="small" type="link" @click="handleRestore(record)">Restore</a-button>
+              <a-button v-if="authStore.canDelete('recycle_bin')" size="small" type="link" danger @click="handlePermanentDelete(record)">Delete</a-button>
             </a-space>
           </template>
         </template>

@@ -129,6 +129,9 @@
         <a-form-item v-if="editingItem" label="New Password (leave blank to keep current)">
           <a-input-password v-model:value="form.password" placeholder="Enter new password" />
         </a-form-item>
+        <a-form-item v-if="editingItem && form.password" label="Confirm New Password" required>
+          <a-input-password v-model:value="form.password_confirmation" placeholder="Confirm new password" />
+        </a-form-item>
         <a-form-item label="Role" required>
           <a-select v-model:value="form.role" placeholder="Select role">
             <a-select-option v-for="r in roleOptions" :key="r.value" :value="r.value">
@@ -142,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
@@ -170,6 +173,10 @@ const form = reactive({
   password: '',
   password_confirmation: '',
   role: undefined,
+})
+
+watch(() => form.password, (val) => {
+  if (!val) form.password_confirmation = ''
 })
 
 const columns = [
@@ -254,8 +261,9 @@ function openEdit(record) {
 async function handleSave() {
   if (!form.name || !form.email || !form.role) return message.warning('Name, email, and role are required')
 
-  if (!editingItem.value) {
-    if (!form.password) return message.warning('Password is required')
+  if (!editingItem.value && !form.password) return message.warning('Password is required')
+  if (form.password) {
+    if (!form.password_confirmation) return message.warning('Please confirm the new password')
     if (form.password !== form.password_confirmation) return message.warning('Passwords do not match')
   }
 
@@ -270,6 +278,11 @@ async function handleSave() {
     if (editingItem.value) {
       await adminApi.update(editingItem.value.id, payload)
       message.success('User updated')
+
+      // Refresh auth store when editing own account so header/profile update immediately
+      if (editingItem.value.id === authStore.user?.id) {
+        await Promise.all([authStore.fetchUser(), authStore.fetchPermissions()])
+      }
     } else {
       await adminApi.store(payload)
       message.success('User created')

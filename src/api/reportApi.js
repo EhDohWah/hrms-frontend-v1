@@ -66,6 +66,13 @@ export const reportApi = {
     client.post('/payrolls/registration-report', params, { responseType: 'blob' }),
 
   /**
+   * Export Payroll Register as Excel (per grant).
+   * @param {{ organization: string, pay_period_date: string, grant_code: string }} params
+   */
+  exportPayrollRegisterExcel: (params) =>
+    client.post('/payrolls/register-excel', params, { responseType: 'blob' }),
+
+  /**
    * Export PND91 government filing as text file.
    * @param {{ organization: string, year: number }} params
    */

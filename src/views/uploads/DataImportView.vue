@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="import-grid">
       <!-- Grant Import -->
-      <a-card v-if="authStore.canRead('grants_list')" class="import-card grant-card">
+      <a-card v-if="authStore.canRead('grants')" class="import-card grant-card">
         <template #title>
           <div class="card-title">
             <TrophyOutlined class="card-icon" />
@@ -21,7 +21,7 @@
           </a-button>
         </div>
 
-        <template v-if="authStore.canCreate('grants_list')">
+        <template v-if="authStore.canCreate('grants')">
           <a-upload-dragger
             v-model:file-list="grantFileList"
             :before-upload="() => false"

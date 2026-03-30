@@ -26,12 +26,12 @@ const auth = useAuthStore()
 
 const allActions = [
   { label: 'Add Employee', to: '/employees/new', icon: markRaw(UserAddOutlined), bg: '#eff6ff', color: '#2563eb', permission: 'employees' },
-  { label: 'Leave Requests', to: '/leave-requests', icon: markRaw(CalendarOutlined), bg: '#fef3c7', color: '#d97706', permission: 'leaves_admin' },
-  { label: 'Payroll', to: '/payroll', icon: markRaw(DollarOutlined), bg: '#f0fdf4', color: '#16a34a', permission: 'employee_salary' },
+  { label: 'Leave Requests', to: '/leave-requests', icon: markRaw(CalendarOutlined), bg: '#fef3c7', color: '#d97706', permission: 'leave_requests' },
+  { label: 'Payroll', to: '/payroll', icon: markRaw(DollarOutlined), bg: '#f0fdf4', color: '#16a34a', permission: 'employee_salaries' },
   { label: 'Employees', to: '/employees', icon: markRaw(TeamOutlined), bg: '#fce7f3', color: '#db2777', permission: 'employees' },
   { label: 'Interviews', to: '/interviews', icon: markRaw(ScheduleOutlined), bg: '#f0f9ff', color: '#0284c7', permission: 'interviews' },
   { label: 'Departments', to: '/departments', icon: markRaw(ApartmentOutlined), bg: '#faf5ff', color: '#7c3aed', permission: 'departments' },
-  { label: 'Reports', to: '/reports', icon: markRaw(BarChartOutlined), bg: '#fff7ed', color: '#ea580c', permission: 'report_list' },
+  { label: 'Reports', to: '/reports', icon: markRaw(BarChartOutlined), bg: '#fff7ed', color: '#ea580c', permission: 'reports' },
   { label: 'Holidays', to: '/holidays', icon: markRaw(FileTextOutlined), bg: '#f0fdfa', color: '#0d9488', permission: 'holidays' },
 ]
 

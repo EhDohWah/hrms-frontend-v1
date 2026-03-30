@@ -7,7 +7,7 @@
       <div class="filter-bar">
         <a-input
           v-model:value="search"
-          placeholder="Search by employee..."
+          placeholder="Search employee..."
           allow-clear
           class="filter-input"
           style="width: 240px"
@@ -17,6 +17,16 @@
           <template #prefix><SearchOutlined /></template>
         </a-input>
         <a-select
+          v-model:value="filters.organization"
+          placeholder="Organization"
+          allow-clear
+          class="filter-input"
+          style="width: 160px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+        </a-select>
+        <a-select
           v-model:value="filters.status"
           placeholder="Status"
           allow-clear
@@ -24,25 +34,20 @@
           style="width: 140px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="present">Present</a-select-option>
-          <a-select-option value="absent">Absent</a-select-option>
-          <a-select-option value="late">Late</a-select-option>
-          <a-select-option value="half_day">Half Day</a-select-option>
-          <a-select-option value="on_leave">On Leave</a-select-option>
+          <a-select-option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</a-select-option>
         </a-select>
-        <a-date-picker
-          v-model:value="filters.date"
-          placeholder="Date"
+        <a-range-picker
+          v-model:value="filters.dateRange"
           format="DD MMM YYYY"
           value-format="YYYY-MM-DD"
           allow-clear
           class="filter-input"
           @change="onSearchOrFilterChange"
         />
-        <a-button v-if="selectedRowKeys.length > 0 && authStore.canEdit('attendance_admin')" danger @click="handleBulkDelete">
+        <a-button v-if="selectedRowKeys.length > 0 && authStore.canEdit('attendance')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
-        <a-button v-if="authStore.canEdit('attendance_admin')" type="primary" @click="openCreate">
+        <a-button v-if="authStore.canEdit('attendance')" type="primary" @click="openCreate">
           <PlusOutlined /> Add Record
         </a-button>
       </div>
@@ -55,33 +60,39 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
-        :row-selection="authStore.canEdit('attendance_admin') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
-        :scroll="{ x: 'max-content', y: 600 }"
-        :virtual="true"
+        :row-selection="authStore.canEdit('attendance') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :scroll="{ x: 'max-content' }"
         @change="handleTableChange"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'employee'">
-            <div class="cell-employee">
-              <span class="cell-name">{{ record.employee?.first_name_en }} {{ record.employee?.last_name_en }}</span>
-              <span class="cell-sub font-mono">{{ record.employee?.staff_id }}</span>
-            </div>
+          <template v-if="column.key === 'organization'">
+            <a-tag v-if="record.employee?.organization" :color="getOrgColor(record.employee.organization)" size="small">{{ record.employee.organization }}</a-tag>
+            <span v-else>—</span>
+          </template>
+          <template v-else-if="column.key === 'staff_id'">
+            <span class="font-mono">{{ record.employee?.staff_id || '—' }}</span>
+          </template>
+          <template v-else-if="column.key === 'employee'">
+            <span class="cell-name">{{ record.employee?.first_name_en }} {{ record.employee?.last_name_en }}</span>
           </template>
           <template v-else-if="column.key === 'date'">
             {{ formatDate(record.date) }}
           </template>
-          <template v-else-if="column.key === 'check_in'">
-            {{ record.check_in || '—' }}
+          <template v-else-if="column.key === 'clock_in'">
+            {{ record.clock_in || '—' }}
           </template>
-          <template v-else-if="column.key === 'check_out'">
-            {{ record.check_out || '—' }}
+          <template v-else-if="column.key === 'clock_out'">
+            {{ record.clock_out || '—' }}
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="statusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'notes'">
+            {{ record.notes || '—' }}
+          </template>
           <template v-else-if="column.key === 'actions'">
-            <a-space v-if="authStore.canEdit('attendance_admin')">
+            <a-space v-if="authStore.canEdit('attendance')">
               <a-button size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -95,12 +106,35 @@
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Attendance' : 'Add Attendance'"
       @ok="handleSave"
+      @cancel="resetForm"
       :confirm-loading="saving"
       :width="'min(95vw, 520px)'"
     >
       <a-form :model="form" layout="vertical" class="modal-form">
-        <a-form-item label="Employee ID" required>
-          <a-input v-model:value="form.employee_id" placeholder="Enter employee ID" :disabled="!!editingItem" />
+        <a-form-item label="Employee" required>
+          <a-select
+            v-model:value="form.employee_id"
+            placeholder="Search employee by name or staff ID..."
+            show-search
+            :filter-option="false"
+            :loading="employeesLoading"
+            :disabled="!!editingItem"
+            :not-found-content="employeeSearchQuery ? 'No employees found' : 'Type to search...'"
+            allow-clear
+            style="width: 100%"
+            @search="onEmployeeSearch"
+          >
+            <a-select-option
+              v-for="emp in employees"
+              :key="emp.id"
+              :value="emp.id"
+              :label="`${emp.first_name_en} ${emp.last_name_en} — ${emp.staff_id}`"
+            >
+              {{ emp.first_name_en }} {{ emp.last_name_en }}
+              <span class="font-mono" style="color: var(--color-text-muted); font-size: 12px; margin-left: 6px">{{ emp.staff_id }}</span>
+            </a-select-option>
+          </a-select>
+          <div v-if="editingItem" class="field-hint">Employee cannot be changed in edit mode</div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -111,29 +145,25 @@
           <a-col :span="12">
             <a-form-item label="Status" required>
               <a-select v-model:value="form.status" placeholder="Select status">
-                <a-select-option value="present">Present</a-select-option>
-                <a-select-option value="absent">Absent</a-select-option>
-                <a-select-option value="late">Late</a-select-option>
-                <a-select-option value="half_day">Half Day</a-select-option>
-                <a-select-option value="on_leave">On Leave</a-select-option>
+                <a-select-option v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
         </a-row>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Check In">
-              <a-time-picker v-model:value="form.check_in" style="width: 100%" format="HH:mm" value-format="HH:mm" />
+            <a-form-item label="Clock In">
+              <a-time-picker v-model:value="form.clock_in" style="width: 100%" format="HH:mm" value-format="HH:mm" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="Check Out">
-              <a-time-picker v-model:value="form.check_out" style="width: 100%" format="HH:mm" value-format="HH:mm" />
+            <a-form-item label="Clock Out">
+              <a-time-picker v-model:value="form.clock_out" style="width: 100%" format="HH:mm" value-format="HH:mm" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="Remarks">
-          <a-textarea v-model:value="form.remarks" placeholder="Enter remarks" :rows="2" />
+        <a-form-item label="Notes">
+          <a-textarea v-model:value="form.notes" placeholder="Enter notes" :rows="2" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -141,38 +171,57 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, inject, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
-import { attendanceApi } from '@/api'
+import { attendanceApi, employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import { formatDate } from '@/utils/formatters'
 
-const dayjs = inject('$dayjs')
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
+const getSearchSignal = useAbortController()
+
+const STATUS_OPTIONS = [
+  { value: 'Present', label: 'Present' },
+  { value: 'Absent', label: 'Absent' },
+  { value: 'Late', label: 'Late' },
+  { value: 'Half Day', label: 'Half Day' },
+  { value: 'On Leave', label: 'On Leave' },
+]
+const STATUS_COLOR_MAP = { Present: 'green', Absent: 'red', Late: 'orange', 'Half Day': 'blue', 'On Leave': 'purple' }
 
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
-const filters = reactive({ status: undefined, date: null })
+const filters = reactive({ organization: undefined, status: undefined, dateRange: null })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const modalVisible = ref(false)
 const editingItem = ref(null)
-const form = reactive({ employee_id: '', date: null, status: 'present', check_in: null, check_out: null, remarks: '' })
+const form = reactive({ employee_id: undefined, date: null, status: 'Present', clock_in: null, clock_out: null, notes: '' })
+
+// Employee search for modal
+const employees = ref([])
+const employeesLoading = ref(false)
+const employeeSearchQuery = ref('')
+let employeeSearchTimer = null
 
 const columns = [
-  { title: 'Employee', key: 'employee', width: 200 },
+  { title: 'Organization', key: 'organization', width: 110, align: 'center' },
+  { title: 'Staff ID', key: 'staff_id', width: 110 },
+  { title: 'Employee', key: 'employee', width: 180 },
   { title: 'Date', key: 'date', width: 140 },
-  { title: 'Check In', key: 'check_in', width: 100, align: 'center' },
-  { title: 'Check Out', key: 'check_out', width: 100, align: 'center' },
+  { title: 'Clock In', key: 'clock_in', width: 100, align: 'center' },
+  { title: 'Clock Out', key: 'clock_out', width: 100, align: 'center' },
   { title: 'Hours', dataIndex: 'total_hours', width: 80, align: 'center' },
   { title: 'Status', key: 'status', width: 110, align: 'center' },
-  { title: 'Remarks', dataIndex: 'remarks', ellipsis: true },
+  { title: 'Notes', key: 'notes', ellipsis: true },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]
 
@@ -185,11 +234,8 @@ const tablePagination = computed(() => ({
   pageSizeOptions: ['10', '20', '50', '100'],
 }))
 
-function formatDate(d) { return d ? dayjs(d).format('DD MMM YYYY') : '—' }
-
 function statusColor(status) {
-  const map = { present: 'green', absent: 'red', late: 'orange', half_day: 'blue', on_leave: 'purple' }
-  return map[status?.toLowerCase()] || 'default'
+  return STATUS_COLOR_MAP[status] || 'default'
 }
 
 async function fetchItems() {
@@ -199,8 +245,10 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
+      ...(filters.organization && { filter_organization: filters.organization }),
       ...(filters.status && { filter_status: filters.status }),
-      ...(filters.date && { filter_date_from: filters.date, filter_date_to: filters.date }),
+      ...(filters.dateRange?.[0] && { filter_date_from: filters.dateRange[0] }),
+      ...(filters.dateRange?.[1] && { filter_date_to: filters.dateRange[1] }),
     }
     const { data } = await attendanceApi.list(params, { signal: getSignal() })
     items.value = data.data || []
@@ -220,8 +268,40 @@ function handleTableChange(pag) {
   fetchItems()
 }
 
+// ── Employee Search ──────────────────────────────────────────────────────────
+
+function onEmployeeSearch(query) {
+  employeeSearchQuery.value = query
+  if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
+  if (!query || query.length < 2) {
+    employees.value = []
+    return
+  }
+  employeeSearchTimer = setTimeout(() => searchEmployees(query), 300)
+}
+
+async function searchEmployees(query) {
+  employeesLoading.value = true
+  try {
+    const { data } = await employeeApi.list({ search: query, per_page: 20 }, { signal: getSearchSignal() })
+    employees.value = data?.data || []
+  } catch (err) {
+    if (err.name !== 'CanceledError') employees.value = []
+  } finally {
+    employeesLoading.value = false
+  }
+}
+
+onUnmounted(() => {
+  if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
+})
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+
 function resetForm() {
-  Object.assign(form, { employee_id: '', date: null, status: 'present', check_in: null, check_out: null, remarks: '' })
+  Object.assign(form, { employee_id: undefined, date: null, status: 'Present', clock_in: null, clock_out: null, notes: '' })
+  employees.value = []
+  employeeSearchQuery.value = ''
 }
 
 function openCreate() {
@@ -233,18 +313,21 @@ function openCreate() {
 function openEdit(record) {
   editingItem.value = record
   Object.assign(form, {
-    employee_id: record.employee_id || '',
+    employee_id: record.employee_id || undefined,
     date: record.date || null,
-    status: record.status || 'present',
-    check_in: record.check_in || null,
-    check_out: record.check_out || null,
-    remarks: record.remarks || '',
+    status: record.status || 'Present',
+    clock_in: record.clock_in || null,
+    clock_out: record.clock_out || null,
+    notes: record.notes || '',
   })
+  if (record.employee) {
+    employees.value = [record.employee]
+  }
   modalVisible.value = true
 }
 
 async function handleSave() {
-  if (!form.employee_id) return message.warning('Employee ID is required')
+  if (!form.employee_id) return message.warning('Please select an employee')
   if (!form.date) return message.warning('Date is required')
   saving.value = true
   try {
@@ -325,8 +408,7 @@ onMounted(() => {
   }
 }
 .page-header-stats { display: flex; gap: 6px; }
-.cell-employee { display: flex; flex-direction: column; }
-.cell-name { font-weight: 600; font-size: 13.5px; }
-.cell-sub { font-size: 12px; color: var(--color-text-muted); }
+.cell-name { font-weight: 600; font-size: 14px; }
 .modal-form { margin-top: 16px; }
+.field-hint { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
 </style>

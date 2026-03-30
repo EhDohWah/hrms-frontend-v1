@@ -33,10 +33,10 @@
         >
           <a-select-option v-for="t in typeOptions" :key="t.id" :value="t.id">{{ t.name }}</a-select-option>
         </a-select>
-        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('training_list')" danger @click="handleBulkDelete">
+        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('trainings')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
-        <a-button v-if="authStore.canCreate('training_list')" type="primary" @click="openCreate">
+        <a-button v-if="authStore.canCreate('trainings')" type="primary" @click="openCreate">
           <PlusOutlined /> Add Training
         </a-button>
       </div>
@@ -49,7 +49,7 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
-        :row-selection="authStore.canDelete('training_list') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :row-selection="authStore.canDelete('trainings') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
         :scroll="{ x: 'max-content' }"
         @change="handleTableChange"
         size="middle"
@@ -69,8 +69,8 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button v-if="authStore.canUpdate('training_list')" size="small" type="link" @click.stop="openEdit(record)">Edit</a-button>
-              <a-button v-if="authStore.canDelete('training_list')" size="small" type="link" danger @click.stop="handleDelete(record)">Delete</a-button>
+              <a-button v-if="authStore.canUpdate('trainings')" size="small" type="link" @click.stop="openEdit(record)">Edit</a-button>
+              <a-button v-if="authStore.canDelete('trainings')" size="small" type="link" danger @click.stop="handleDelete(record)">Delete</a-button>
             </a-space>
           </template>
         </template>

@@ -1,22 +1,83 @@
 <template>
   <div class="page-container">
-    <div class="reports-grid">
+    <div class="page-header">
+      <a-input-search
+        v-model:value="searchQuery"
+        placeholder="Search reports..."
+        allow-clear
+        style="width: 280px"
+      />
+      <div class="page-header-actions">
+        <a-tag color="default">{{ totalReportCount }} Reports</a-tag>
+      </div>
+    </div>
 
-      <!-- ── Card 1: Interview Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <UsergroupAddOutlined class="card-icon" />
-            <span>Interview Report</span>
+    <a-card :body-style="{ padding: 0 }" class="reports-card">
+      <template v-for="(group, gi) in filteredGroups" :key="group.key">
+        <div class="group-header" :class="{ 'group-header--first': gi === 0 }">
+          {{ group.label }}
+        </div>
+        <div
+          v-for="(report, ri) in group.reports"
+          :key="report.key"
+          class="report-row"
+          :class="{ 'report-row--active': selectedReport?.key === report.key && drawerVisible }"
+          :style="animStyle(gi, ri)"
+          tabindex="0"
+          role="button"
+          @click="openDrawer(report, group.key)"
+          @keydown.enter.prevent="openDrawer(report, group.key)"
+        >
+          <div class="report-row__icon" :class="`report-icon--${group.key}`">
+            <component :is="report.icon" />
           </div>
-        </template>
-        <p class="card-description">
-          Export a summary of all interviews within a date range, including candidate details,
-          interview status, position applied, and interviewers.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadInterviewPdf">
-          <a-row :gutter="12">
-            <a-col :span="24">
+          <div class="report-row__body">
+            <div class="report-row__title">{{ report.title }}</div>
+            <div class="report-row__desc">{{ report.description }}</div>
+          </div>
+          <div class="report-row__formats">
+            <span
+              v-for="fmt in report.formats"
+              :key="fmt"
+              class="format-badge"
+              :class="`format-badge--${fmt.toLowerCase()}`"
+            >{{ fmt }}</span>
+          </div>
+          <RightOutlined class="report-row__arrow" />
+        </div>
+      </template>
+
+      <div v-if="filteredGroups.length === 0" class="reports-empty">
+        <SearchOutlined class="reports-empty__icon" />
+        <p>No reports match "<strong>{{ searchQuery }}</strong>"</p>
+      </div>
+    </a-card>
+
+    <!-- Report Configuration Drawer -->
+    <a-drawer
+      v-model:open="drawerVisible"
+      placement="right"
+      :width="'min(95vw, 460px)'"
+      :closable="false"
+      :header-style="{ display: 'none' }"
+      :body-style="{ padding: 0 }"
+    >
+      <template v-if="selectedReport">
+        <div class="drawer-hero" :class="`drawer-hero--${selectedReport.groupKey}`">
+          <button class="drawer-close" @click="drawerVisible = false" aria-label="Close drawer">
+            <CloseOutlined />
+          </button>
+          <div class="drawer-hero__icon">
+            <component :is="selectedReport.icon" />
+          </div>
+          <h3 class="drawer-hero__title">{{ selectedReport.title }}</h3>
+          <p class="drawer-hero__desc">{{ selectedReport.fullDescription }}</p>
+        </div>
+
+        <div class="drawer-form">
+          <!-- Interview Report -->
+          <template v-if="selectedReport.key === 'interview'">
+            <a-form layout="vertical">
               <a-form-item label="Date Range" required>
                 <a-range-picker
                   v-model:value="interview.dateRange"
@@ -26,43 +87,12 @@
                   :allow-clear="true"
                 />
               </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="interview.loadingPdf"
-              :disabled="!interview.dateRange"
-            >
-              <FilePdfOutlined /> Export PDF
-            </a-button>
-            <a-button
-              :loading="interview.loadingExcel"
-              :disabled="!interview.dateRange"
-              @click="downloadInterviewExcel"
-            >
-              <FileExcelOutlined /> Export Excel
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+            </a-form>
+          </template>
 
-      <!-- ── Card 2: Job Offer Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <SolutionOutlined class="card-icon" />
-            <span>Job Offer Report</span>
-          </div>
-        </template>
-        <p class="card-description">
-          Export a summary of all job offers within a date range, including candidate name,
-          position, probation salary, post-probation salary, and acceptance status.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadJobOfferPdf">
-          <a-row :gutter="12">
-            <a-col :span="24">
+          <!-- Job Offer Report -->
+          <template v-else-if="selectedReport.key === 'jobOffer'">
+            <a-form layout="vertical">
               <a-form-item label="Date Range" required>
                 <a-range-picker
                   v-model:value="jobOffer.dateRange"
@@ -72,36 +102,12 @@
                   :allow-clear="true"
                 />
               </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="jobOffer.loadingPdf"
-              :disabled="!jobOffer.dateRange"
-            >
-              <FilePdfOutlined /> Export PDF
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+            </a-form>
+          </template>
 
-      <!-- ── Card 3: Department Leave Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <CalendarOutlined class="card-icon" />
-            <span>Department Leave Report</span>
-          </div>
-        </template>
-        <p class="card-description">
-          Export a department-level leave report showing used and remaining leave balances per
-          employee, filtered by site and department.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadDeptLeavePdf">
-          <a-row :gutter="12">
-            <a-col :span="24">
+          <!-- Department Leave Report -->
+          <template v-else-if="selectedReport.key === 'deptLeave'">
+            <a-form layout="vertical">
               <a-form-item label="Date Range" required>
                 <a-range-picker
                   v-model:value="deptLeave.dateRange"
@@ -111,60 +117,38 @@
                   :allow-clear="true"
                 />
               </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="Site (Work Location)" required>
-                <a-select
-                  v-model:value="deptLeave.site"
-                  placeholder="Select site"
-                  :options="siteOptions"
-                  :loading="optionsLoading"
-                  allow-clear
-                  style="width: 100%"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="Department" required>
-                <a-select
-                  v-model:value="deptLeave.department"
-                  placeholder="Select department"
-                  :options="departmentOptions"
-                  :loading="optionsLoading"
-                  allow-clear
-                  style="width: 100%"
-                />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="deptLeave.loadingPdf"
-              :disabled="!deptLeave.dateRange || !deptLeave.site || !deptLeave.department"
-            >
-              <FilePdfOutlined /> Export PDF
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Site (Work Location)" required>
+                    <a-select
+                      v-model:value="deptLeave.site"
+                      placeholder="Select site"
+                      :options="siteOptions"
+                      :loading="optionsLoading"
+                      allow-clear
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Department" required>
+                    <a-select
+                      v-model:value="deptLeave.department"
+                      placeholder="Select department"
+                      :options="departmentOptions"
+                      :loading="optionsLoading"
+                      allow-clear
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </template>
 
-      <!-- ── Card 4: Individual Leave Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <UserOutlined class="card-icon" />
-            <span>Individual Leave Report</span>
-          </div>
-        </template>
-        <p class="card-description">
-          Export a per-employee leave report showing their leave requests and remaining balances
-          across all leave types within a date range.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadIndividualLeavePdf">
-          <a-row :gutter="12">
-            <a-col :span="24">
+          <!-- Individual Leave Report -->
+          <template v-else-if="selectedReport.key === 'individualLeave'">
+            <a-form layout="vertical">
               <a-form-item label="Date Range" required>
                 <a-range-picker
                   v-model:value="individualLeave.dateRange"
@@ -174,8 +158,6 @@
                   :allow-clear="true"
                 />
               </a-form-item>
-            </a-col>
-            <a-col :span="24">
               <a-form-item label="Staff ID" required>
                 <a-input
                   v-model:value="individualLeave.staffId"
@@ -183,127 +165,152 @@
                   allow-clear
                 />
               </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="individualLeave.loadingPdf"
-              :disabled="!individualLeave.dateRange || !individualLeave.staffId"
-            >
-              <FilePdfOutlined /> Export PDF
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+            </a-form>
+          </template>
 
-      <!-- ── Card 5: Payroll Registration Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <DollarOutlined class="card-icon" />
-            <span>Payroll Registration Report</span>
-          </div>
-        </template>
-        <p class="card-description">
-          Export a payroll summary grouped by department with subtotals and grand total.
-          Shows salary, deductions, and net pay for all employees in the selected pay period.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadPayrollRegistrationPdf">
-          <a-row :gutter="12">
-            <a-col :span="12">
-              <a-form-item label="Organization" required>
+          <!-- Payroll Registration Report -->
+          <template v-else-if="selectedReport.key === 'payrollRegistration'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="payrollRegistration.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Pay Period" required>
+                    <a-date-picker
+                      v-model:value="payrollRegistration.payPeriod"
+                      picker="month"
+                      format="MMM YYYY"
+                      placeholder="Select month"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </template>
+
+          <!-- Payroll Register Excel (per Grant) -->
+          <template v-else-if="selectedReport.key === 'payrollRegisterExcel'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="payrollRegisterExcel.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Pay Period" required>
+                    <a-date-picker
+                      v-model:value="payrollRegisterExcel.payPeriod"
+                      picker="month"
+                      format="MMM YYYY"
+                      placeholder="Select month"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-form-item label="Grant" required>
                 <a-select
-                  v-model:value="payrollRegistration.organization"
-                  placeholder="Select organization"
-                  style="width: 100%"
-                >
-                  <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="Pay Period" required>
-                <a-date-picker
-                  v-model:value="payrollRegistration.payPeriod"
-                  picker="month"
-                  format="MMM YYYY"
-                  placeholder="Select month"
+                  v-model:value="payrollRegisterExcel.grantCode"
+                  placeholder="Select grant"
+                  :options="grantOptions"
+                  :loading="grantsLoading"
+                  show-search
+                  :filter-option="(input, option) => option.label.toLowerCase().includes(input.toLowerCase())"
+                  allow-clear
                   style="width: 100%"
                 />
               </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="payrollRegistration.loadingPdf"
-              :disabled="!payrollRegistration.organization || !payrollRegistration.payPeriod"
-            >
-              <FilePdfOutlined /> Export PDF
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+            </a-form>
+          </template>
 
-      <!-- ── Card 6: PND91 Government Report ── -->
-      <a-card class="report-card">
-        <template #title>
-          <div class="card-title">
-            <AuditOutlined class="card-icon" />
-            <span>PND91 Annual Tax Report</span>
-          </div>
-        </template>
-        <p class="card-description">
-          Export the PND91 annual personal income tax filing data for submission to the
-          Thai Revenue Department. Contains citizen ID, income, tax withheld, and SSF per employee.
-        </p>
-        <a-form layout="vertical" @submit.prevent="downloadPND91">
-          <a-row :gutter="12">
-            <a-col :span="12">
-              <a-form-item label="Organization" required>
-                <a-select
-                  v-model:value="pnd91.organization"
-                  placeholder="Select organization"
-                  style="width: 100%"
-                >
-                  <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="Tax Year" required>
-                <a-date-picker
-                  v-model:value="pnd91.year"
-                  picker="year"
-                  format="YYYY"
-                  placeholder="Select year"
-                  style="width: 100%"
-                />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <div class="action-row">
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="pnd91.loadingFile"
-              :disabled="!pnd91.organization || !pnd91.year"
-            >
-              <FilePdfOutlined /> Export File
-            </a-button>
-          </div>
-        </a-form>
-      </a-card>
+          <!-- PND91 Annual Tax Report -->
+          <template v-else-if="selectedReport.key === 'pnd91'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="pnd91.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Tax Year" required>
+                    <a-date-picker
+                      v-model:value="pnd91.year"
+                      picker="year"
+                      format="YYYY"
+                      placeholder="Select year"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </template>
+        </div>
+      </template>
 
-    </div>
+      <template #footer>
+        <div v-if="selectedReport" class="drawer-footer">
+          <a-button @click="drawerVisible = false">Cancel</a-button>
+          <div class="drawer-footer__actions">
+            <template v-if="selectedReport.key === 'interview'">
+              <a-button :loading="interview.loadingExcel" :disabled="!interview.dateRange" @click="downloadInterviewExcel">
+                <FileExcelOutlined /> Excel
+              </a-button>
+              <a-button type="primary" :loading="interview.loadingPdf" :disabled="!interview.dateRange" @click="downloadInterviewPdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'jobOffer'">
+              <a-button type="primary" :loading="jobOffer.loadingPdf" :disabled="!jobOffer.dateRange" @click="downloadJobOfferPdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'deptLeave'">
+              <a-button type="primary" :loading="deptLeave.loadingPdf" :disabled="!deptLeave.dateRange || !deptLeave.site || !deptLeave.department" @click="downloadDeptLeavePdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'individualLeave'">
+              <a-button type="primary" :loading="individualLeave.loadingPdf" :disabled="!individualLeave.dateRange || !individualLeave.staffId" @click="downloadIndividualLeavePdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'payrollRegistration'">
+              <a-button type="primary" :loading="payrollRegistration.loadingPdf" :disabled="!payrollRegistration.organization || !payrollRegistration.payPeriod" @click="downloadPayrollRegistrationPdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'payrollRegisterExcel'">
+              <a-button type="primary" :loading="payrollRegisterExcel.loadingExcel" :disabled="!payrollRegisterExcel.organization || !payrollRegisterExcel.payPeriod || !payrollRegisterExcel.grantCode" @click="downloadPayrollRegisterExcel">
+                <FileExcelOutlined /> Export Excel
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'pnd91'">
+              <a-button type="primary" :loading="pnd91.loadingFile" :disabled="!pnd91.organization || !pnd91.year" @click="downloadPND91">
+                <FilePdfOutlined /> Export File
+              </a-button>
+            </template>
+          </div>
+        </div>
+      </template>
+    </a-drawer>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, computed, watch, onMounted, markRaw } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   UsergroupAddOutlined,
@@ -314,22 +321,129 @@ import {
   AuditOutlined,
   FilePdfOutlined,
   FileExcelOutlined,
+  RightOutlined,
+  CloseOutlined,
+  SearchOutlined,
 } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { reportApi } from '@/api/reportApi'
 import { optionsApi } from '@/api/optionsApi'
 import { ORG_OPTIONS } from '@/constants/organizations'
-import { formatDate } from '@/utils/formatters'
 import { parseBlobError } from '@/utils/helpers'
 
 const appStore = useAppStore()
 
-onMounted(() => {
-  appStore.setPageMeta('Reports')
-  loadOptions()
+// ── Report registry ──────────────────────────────────────────────────────────
+
+const REPORT_GROUPS = [
+  {
+    key: 'recruitment',
+    label: 'Recruitment',
+    reports: [
+      {
+        key: 'interview',
+        title: 'Interview Report',
+        description: 'Interviews with candidate details, status, and positions',
+        fullDescription: 'Export a summary of all interviews within a date range, including candidate details, interview status, position applied, and interviewers.',
+        icon: markRaw(UsergroupAddOutlined),
+        formats: ['PDF', 'Excel'],
+      },
+      {
+        key: 'jobOffer',
+        title: 'Job Offer Report',
+        description: 'Job offers with salary details and acceptance status',
+        fullDescription: 'Export a summary of all job offers within a date range, including candidate name, position, probation salary, post-probation salary, and acceptance status.',
+        icon: markRaw(SolutionOutlined),
+        formats: ['PDF'],
+      },
+    ],
+  },
+  {
+    key: 'leave',
+    label: 'Leave & Attendance',
+    reports: [
+      {
+        key: 'deptLeave',
+        title: 'Department Leave Report',
+        description: 'Leave balances per employee by site and department',
+        fullDescription: 'Export a department-level leave report showing used and remaining leave balances per employee, filtered by site and department.',
+        icon: markRaw(CalendarOutlined),
+        formats: ['PDF'],
+      },
+      {
+        key: 'individualLeave',
+        title: 'Individual Leave Report',
+        description: 'Per-employee leave requests and remaining balances',
+        fullDescription: 'Export a per-employee leave report showing their leave requests and remaining balances across all leave types within a date range.',
+        icon: markRaw(UserOutlined),
+        formats: ['PDF'],
+      },
+    ],
+  },
+  {
+    key: 'payroll',
+    label: 'Payroll & Tax',
+    reports: [
+      {
+        key: 'payrollRegistration',
+        title: 'Payroll Registration Report',
+        description: 'Payroll summary by department with salary and deductions',
+        fullDescription: 'Export a payroll summary grouped by department with subtotals and grand total. Shows salary, deductions, and net pay for all employees in the selected pay period.',
+        icon: markRaw(DollarOutlined),
+        formats: ['PDF'],
+      },
+      {
+        key: 'payrollRegisterExcel',
+        title: 'Payroll Register (per Grant)',
+        description: 'Per-grant payroll register with formulas grouped by position',
+        fullDescription: 'Export an Excel payroll register for a specific grant. Shows one row per funding allocation, grouped by grant position, with live Excel formulas for provident fund, social insurance, health welfare, and net pay calculations.',
+        icon: markRaw(FileExcelOutlined),
+        formats: ['Excel'],
+      },
+      {
+        key: 'pnd91',
+        title: 'PND91 Annual Tax Report',
+        description: 'Annual tax filing data for Thai Revenue Department',
+        fullDescription: 'Export the PND91 annual personal income tax filing data for submission to the Thai Revenue Department. Contains citizen ID, income, tax withheld, and SSF per employee.',
+        icon: markRaw(AuditOutlined),
+        formats: ['File'],
+      },
+    ],
+  },
+]
+
+const totalReportCount = REPORT_GROUPS.reduce((sum, g) => sum + g.reports.length, 0)
+
+// ── Search and selection ─────────────────────────────────────────────────────
+
+const searchQuery = ref('')
+const selectedReport = ref(null)
+const drawerVisible = ref(false)
+
+const filteredGroups = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return REPORT_GROUPS
+  return REPORT_GROUPS
+    .map((group) => ({
+      ...group,
+      reports: group.reports.filter(
+        (r) => r.title.toLowerCase().includes(q) || r.description.toLowerCase().includes(q),
+      ),
+    }))
+    .filter((group) => group.reports.length > 0)
 })
 
-// ── Filter state per report card ──────────────────────────────────────────────
+function openDrawer(report, groupKey) {
+  selectedReport.value = { ...report, groupKey }
+  drawerVisible.value = true
+  if (report.key === 'payrollRegisterExcel') loadGrantOptions()
+}
+
+function animStyle(gi, ri) {
+  return { animationDelay: `${(gi * 3 + ri) * 40}ms` }
+}
+
+// ── Filter state per report ──────────────────────────────────────────────────
 
 const interview = reactive({
   dateRange: null,
@@ -361,17 +475,37 @@ const payrollRegistration = reactive({
   loadingPdf: false,
 })
 
+const payrollRegisterExcel = reactive({
+  organization: null,
+  payPeriod: null,
+  grantCode: null,
+  loadingExcel: false,
+})
+
 const pnd91 = reactive({
   organization: null,
   year: null,
   loadingFile: false,
 })
 
-// ── Dropdown options ──────────────────────────────────────────────────────────
+// ── Dropdown options ─────────────────────────────────────────────────────────
 
 const siteOptions = ref([])
 const departmentOptions = ref([])
+const allGrants = ref([])
 const optionsLoading = ref(false)
+const grantsLoading = ref(false)
+
+const grantOptions = computed(() => {
+  const org = payrollRegisterExcel.organization
+  if (!org) return allGrants.value
+  return allGrants.value.filter((g) => g.organization === org)
+})
+
+// Clear grant selection when organization changes (grants are org-specific)
+watch(() => payrollRegisterExcel.organization, () => {
+  payrollRegisterExcel.grantCode = null
+})
 
 async function loadOptions() {
   optionsLoading.value = true
@@ -389,13 +523,30 @@ async function loadOptions() {
       label: d.name,
     }))
   } catch {
-    message.error('Failed to load site and department options')
+    message.error('Failed to load filter options')
   } finally {
     optionsLoading.value = false
   }
 }
 
-// ── Download helpers ──────────────────────────────────────────────────────────
+async function loadGrantOptions() {
+  if (allGrants.value.length > 0) return
+  grantsLoading.value = true
+  try {
+    const res = await optionsApi.grants()
+    allGrants.value = (res.data?.data || []).map((g) => ({
+      value: g.code,
+      label: `${g.code} — ${g.name}`,
+      organization: g.organization,
+    }))
+  } catch {
+    message.error('Failed to load grant options')
+  } finally {
+    grantsLoading.value = false
+  }
+}
+
+// ── Download handlers ────────────────────────────────────────────────────────
 
 async function downloadInterviewPdf() {
   if (!interview.dateRange) return
@@ -491,7 +642,7 @@ async function downloadPayrollRegistrationPdf() {
   if (!payrollRegistration.organization || !payrollRegistration.payPeriod) return
   payrollRegistration.loadingPdf = true
   try {
-    const period = formatDate(payrollRegistration.payPeriod, 'YYYY-MM')
+    const period = payrollRegistration.payPeriod.format('YYYY-MM')
     const res = await reportApi.exportPayrollRegistrationPdf({
       organization: payrollRegistration.organization,
       pay_period_date: period,
@@ -508,11 +659,34 @@ async function downloadPayrollRegistrationPdf() {
   }
 }
 
+async function downloadPayrollRegisterExcel() {
+  if (!payrollRegisterExcel.organization || !payrollRegisterExcel.payPeriod || !payrollRegisterExcel.grantCode) return
+  payrollRegisterExcel.loadingExcel = true
+  try {
+    const period = payrollRegisterExcel.payPeriod.format('YYYY-MM')
+    const grantCode = payrollRegisterExcel.grantCode
+    const res = await reportApi.exportPayrollRegisterExcel({
+      organization: payrollRegisterExcel.organization,
+      pay_period_date: period,
+      grant_code: grantCode,
+    })
+    reportApi.downloadBlob(res, `payroll_register_${payrollRegisterExcel.organization}_${period}_${grantCode}.xlsx`)
+  } catch (err) {
+    if (err.response?.status === 404) {
+      message.error('No payroll records found for the selected period and grant code.')
+    } else {
+      message.error(await parseBlobError(err) || 'Failed to export payroll register Excel')
+    }
+  } finally {
+    payrollRegisterExcel.loadingExcel = false
+  }
+}
+
 async function downloadPND91() {
   if (!pnd91.organization || !pnd91.year) return
   pnd91.loadingFile = true
   try {
-    const year = formatDate(pnd91.year, 'YYYY')
+    const year = pnd91.year.format('YYYY')
     const res = await reportApi.exportPND91({
       organization: pnd91.organization,
       year,
@@ -528,47 +702,283 @@ async function downloadPND91() {
     pnd91.loadingFile = false
   }
 }
+
+onMounted(() => {
+  appStore.setPageMeta('Reports')
+  loadOptions()
+})
 </script>
 
 <style scoped>
-.reports-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
+/* ── Group headers ── */
+.group-header {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: 16px 20px 8px;
+  border-top: 1px solid var(--color-border-light);
+  user-select: none;
 }
-@media (min-width: 1024px) {
-  .reports-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.group-header--first {
+  border-top: none;
 }
 
-.report-card :deep(.ant-card-head) {
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.card-title {
+/* ── Report rows ── */
+.report-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  padding: 14px 20px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.report-row:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 56px;
+  right: 20px;
+  height: 1px;
+  background: var(--color-border-light);
+}
+.report-row:hover {
+  background: var(--color-bg-hover);
+  border-left-color: var(--color-accent);
+}
+.report-row--active {
+  background: var(--color-accent-light);
+  border-left-color: var(--color-accent);
+}
+.report-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Icon */
+.report-row__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 17px;
+}
+.report-row:hover .report-row__icon {
+  transform: scale(1.06);
+}
+.report-icon--recruitment {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+.report-icon--leave {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+.report-icon--payroll {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+/* Body */
+.report-row__body {
+  flex: 1;
+  min-width: 0;
+}
+.report-row__title {
   font-weight: 600;
   font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.35;
+}
+.report-row__desc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.card-icon {
-  font-size: 16px;
+/* Format badges */
+.report-row__formats {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.format-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+.format-badge--pdf {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.format-badge--excel {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.format-badge--file {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+/* Arrow */
+.report-row__arrow {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.report-row:hover .report-row__arrow {
+  transform: translateX(3px);
+  color: var(--color-accent);
+}
+
+/* Empty state */
+.reports-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.reports-empty__icon {
+  font-size: 32px;
+  color: var(--color-text-muted);
+}
+.reports-empty p {
+  margin: 0;
+}
+
+/* ── Drawer hero ── */
+.drawer-hero {
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid var(--color-border-light);
+  position: relative;
+}
+.drawer-hero--recruitment {
+  background: linear-gradient(145deg, var(--color-info-bg) 0%, var(--color-bg-surface) 100%);
+}
+.drawer-hero--leave {
+  background: linear-gradient(145deg, var(--color-warning-bg) 0%, var(--color-bg-surface) 100%);
+}
+.drawer-hero--payroll {
+  background: linear-gradient(145deg, var(--color-success-bg) 0%, var(--color-bg-surface) 100%);
+}
+
+.drawer-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
   color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.drawer-close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+.drawer-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
-.card-description {
+.drawer-hero__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 14px;
+}
+.drawer-hero--recruitment .drawer-hero__icon {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+.drawer-hero--leave .drawer-hero__icon {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+.drawer-hero--payroll .drawer-hero__icon {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.drawer-hero__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 6px;
+  line-height: 1.3;
+}
+.drawer-hero__desc {
   font-size: 13px;
   color: var(--color-text-secondary);
+  margin: 0;
   line-height: 1.55;
-  margin-bottom: 20px;
 }
 
-.action-row {
+/* Drawer form */
+.drawer-form {
+  padding: 24px;
+}
+
+/* Drawer footer */
+.drawer-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.drawer-footer__actions {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
+}
+
+/* ── Motion ── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes reportRowIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .report-row {
+    animation: reportRowIn 0.3s ease both;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+  }
+  .report-row__icon {
+    transition: transform var(--transition-fast);
+  }
+  .report-row__arrow {
+    transition: transform var(--transition-fast), color var(--transition-fast);
+  }
+  .drawer-close {
+    transition: background var(--transition-fast), color var(--transition-fast);
+  }
 }
 </style>

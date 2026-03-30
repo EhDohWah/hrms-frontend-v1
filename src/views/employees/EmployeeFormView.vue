@@ -29,13 +29,13 @@
         </div>
         <div class="form-header-right">
           <a-button
-            v-if="isEditMode && authStore.canCreate('transfer')"
+            v-if="isEditMode && authStore.canCreate('transfers')"
             @click="transferModalOpen = true"
           >
             <SwapOutlined /> Transfer
           </a-button>
           <a-button
-            v-if="isEditMode && authStore.canCreate('resignation')"
+            v-if="isEditMode && authStore.canCreate('resignations')"
             danger
             @click="resignationModalOpen = true"
           >

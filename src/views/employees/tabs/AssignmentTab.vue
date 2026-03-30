@@ -75,6 +75,43 @@
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- EMPLOYMENT HISTORY                                  -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <template v-if="employmentHistories.length">
+        <div class="section-divider" />
+        <div class="section-title">Employment History</div>
+        <a-table
+          :columns="historyColumns"
+          :data-source="employmentHistories"
+          :row-key="(r) => r.id"
+          :pagination="false"
+          size="small"
+        >
+          <template #bodyCell="{ column, record: h }">
+            <template v-if="column.key === 'date'">
+              {{ formatDate(h.change_date || h.created_at) }}
+            </template>
+            <template v-else-if="column.key === 'reason'">
+              <span>{{ h.change_reason || '—' }}</span>
+              <div v-if="h.notes" class="cell-sub">{{ h.notes }}</div>
+            </template>
+            <template v-else-if="column.key === 'changed_by'">
+              {{ h.changed_by_user || '—' }}
+            </template>
+            <template v-else-if="column.key === 'changes'">
+              <template v-if="h.changes_made">
+                <div v-for="(val, field) in h.changes_made" :key="field" class="change-item">
+                  <span class="change-field">{{ formatFieldName(field) }}:</span>
+                  <span class="change-value">{{ val }}</span>
+                </div>
+              </template>
+              <span v-else>—</span>
+            </template>
+          </template>
+        </a-table>
+      </template>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- SECTION 2: FUNDING ALLOCATIONS                     -->
       <!-- ═══════════════════════════════════════════════════ -->
       <div class="section-divider" />
@@ -538,7 +575,7 @@ const canUpdateEmployment = computed(() => authStore.canUpdate('employment_recor
 const canDeleteEmployment = computed(() => authStore.canDelete('employment_records'))
 const canCreateAllocation = computed(() => authStore.canCreate('employee_funding_allocations'))
 const canUpdateAllocation = computed(() => authStore.canUpdate('employee_funding_allocations'))
-const canReadResignation = computed(() => authStore.canRead('resignation'))
+const canReadResignation = computed(() => authStore.canRead('resignations'))
 
 // ════════════════════════════════════════════════════════
 // EMPLOYMENT: Modal State
@@ -644,6 +681,13 @@ const resignation = computed(() => {
 // ════════════════════════════════════════════════════════
 // FUNDING: Table & State
 // ════════════════════════════════════════════════════════
+const historyColumns = [
+  { title: 'Date', key: 'date', width: 110 },
+  { title: 'Reason', key: 'reason', ellipsis: true },
+  { title: 'Changes', key: 'changes', width: 250 },
+  { title: 'Changed By', key: 'changed_by', width: 140 },
+]
+
 const fundingColumns = [
   { title: 'Grant', key: 'grant', width: 260 },
   { title: 'Position under Grant', key: 'position', width: 200 },
@@ -670,6 +714,33 @@ const loadingGrantStructure = ref(false)
 const allocRows = ref([])
 let allocRowKey = 0
 let originalAllocIds = []
+
+const employmentHistories = computed(() => {
+  const histories = props.employee?.employment?.employmentHistories || props.employee?.employment?.employment_histories || []
+  return [...histories].sort((a, b) => new Date(b.created_at || b.change_date) - new Date(a.created_at || a.change_date))
+})
+
+function formatFieldName(field) {
+  const labels = {
+    pass_probation_salary: 'Salary',
+    probation_salary: 'Probation Salary',
+    previous_year_salary: 'Previous Year Salary',
+    department_id: 'Department',
+    position_id: 'Position',
+    site_id: 'Site',
+    section_department_id: 'Section Dept',
+    start_date: 'Start Date',
+    end_date: 'End Date',
+    pass_probation_date: 'Probation End',
+    end_probation_date: 'End Probation',
+    health_welfare: 'Health Welfare',
+    pvd: 'PVD',
+    saving_fund: 'Saving Fund',
+    student_loan: 'Student Loan',
+    pay_method: 'Pay Method',
+  }
+  return labels[field] || field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
 
 const totalFte = computed(() => {
   const allocs = props.employee?.employee_funding_allocations || []
@@ -1261,6 +1332,9 @@ onMounted(() => {
   margin-left: 4px;
 }
 .cell-sub { font-size: 11.5px; color: var(--color-text-muted); font-family: 'JetBrains Mono', monospace; }
+.change-item { font-size: 12px; line-height: 1.6; }
+.change-field { color: var(--color-text-secondary); font-weight: 500; margin-right: 4px; }
+.change-value { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
 
 .alloc-modal-header {
   display: flex;

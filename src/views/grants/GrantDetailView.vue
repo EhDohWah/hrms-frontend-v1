@@ -12,7 +12,7 @@
             <span class="detail-code font-mono">{{ grant.code }}</span>
           </h2>
         </div>
-        <a-space v-if="grant && authStore.canUpdate('grants_list')">
+        <a-space v-if="grant && authStore.canUpdate('grants')">
           <a-button @click="openEditGrant">Edit Grant</a-button>
         </a-space>
       </div>
@@ -50,7 +50,7 @@
         <!-- Grant Positions Table -->
         <a-card title="Grant Positions" :body-style="{ padding: 0 }">
           <template #extra>
-            <a-button v-if="authStore.canCreate('grants_list')" size="small" type="primary" @click="openCreatePosition">
+            <a-button v-if="authStore.canCreate('grants')" size="small" type="primary" @click="openCreatePosition">
               <PlusOutlined /> Add Position
             </a-button>
           </template>
@@ -83,8 +83,8 @@
               </template>
               <template v-else-if="column.key === 'actions'">
                 <a-space>
-                  <a-button v-if="authStore.canUpdate('grants_list')" size="small" type="link" @click="openEditPosition(record)">Edit</a-button>
-                  <a-button v-if="authStore.canDelete('grants_list')" size="small" type="link" danger @click="handleDeletePosition(record)">Delete</a-button>
+                  <a-button v-if="authStore.canUpdate('grants')" size="small" type="link" @click="openEditPosition(record)">Edit</a-button>
+                  <a-button v-if="authStore.canDelete('grants')" size="small" type="link" danger @click="handleDeletePosition(record)">Delete</a-button>
                 </a-space>
               </template>
             </template>

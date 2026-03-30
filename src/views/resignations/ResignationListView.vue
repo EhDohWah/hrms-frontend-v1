@@ -40,10 +40,10 @@
           show-search
           :filter-option="(input, opt) => opt.name.toLowerCase().includes(input.toLowerCase())"
         />
-        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('resignation')" danger @click="handleBulkDelete">
+        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('resignations')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
-        <a-button v-if="authStore.canCreate('resignation')" type="primary" @click="openCreate">
+        <a-button v-if="authStore.canCreate('resignations')" type="primary" @click="openCreate">
           <PlusOutlined /> Add Resignation
         </a-button>
       </div>
@@ -56,7 +56,7 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
-        :row-selection="authStore.canDelete('resignation') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :row-selection="authStore.canDelete('resignations') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
         @change="handleTableChange"
         :scroll="{ x: 'max-content' }"
         size="middle"
@@ -93,8 +93,8 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button v-if="authStore.canUpdate('resignation')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
-              <a-button v-if="authStore.canDelete('resignation')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+              <a-button v-if="authStore.canUpdate('resignations')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
+              <a-button v-if="authStore.canDelete('resignations')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
           </template>
         </template>

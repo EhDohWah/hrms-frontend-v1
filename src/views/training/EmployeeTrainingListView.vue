@@ -45,7 +45,6 @@
           allow-clear
           style="width: 240px"
           @search="onFilterChange"
-          @pressEnter="onFilterChange"
         />
       </div>
       <div class="page-header-actions">
@@ -184,8 +183,11 @@ const getSignal = useAbortController()
 const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
+const trainingDropdownOptions = ref([])
 const filters = reactive({
-  year: new Date().getFullYear(),
+  year: currentYear,
   organization: undefined,
   training_id: undefined,
   status: undefined,
@@ -209,10 +211,6 @@ let employeeSearchTimer = null
 const trainingOptions = ref([])
 const trainingSearching = ref(false)
 let trainingSearchTimer = null
-
-const currentYear = new Date().getFullYear()
-const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
-const trainingDropdownOptions = ref([])
 
 const columns = [
   { title: 'Organization', key: 'organization', width: 110, align: 'center' },
@@ -434,12 +432,6 @@ onUnmounted(() => {
     align-items: center;
     justify-content: space-between;
   }
-}
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
 }
 .page-header-actions {
   display: flex;

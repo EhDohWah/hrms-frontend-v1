@@ -179,7 +179,7 @@ const search = ref('')
 const filters = reactive({ from_organization: undefined, to_organization: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 
-const canDelete = computed(() => authStore.canDelete('transfer'))
+const canDelete = computed(() => authStore.canDelete('transfers'))
 
 const columns = [
   { title: 'Employee', key: 'employee', width: 200 },

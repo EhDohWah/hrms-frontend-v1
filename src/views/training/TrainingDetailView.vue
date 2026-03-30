@@ -9,7 +9,7 @@
           </a-button>
           <h2 class="detail-title" v-if="training">{{ training.title }}</h2>
         </div>
-        <a-space v-if="training && authStore.canUpdate('training_list')">
+        <a-space v-if="training && authStore.canUpdate('trainings')">
           <a-button @click="openEditTraining">Edit Training</a-button>
         </a-space>
       </div>

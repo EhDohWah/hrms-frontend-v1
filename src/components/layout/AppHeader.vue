@@ -18,15 +18,14 @@
     </div>
 
     <div class="header-right">
-      <!-- Search (hidden on mobile) -->
-      <a-input
-        v-model:value="searchQuery"
-        placeholder="Search..."
-        class="header-search"
-        allow-clear
-      >
-        <template #prefix><SearchOutlined class="search-icon" /></template>
-      </a-input>
+      <!-- Global Search Trigger -->
+      <button class="header-search-trigger" @click="searchVisible = true">
+        <SearchOutlined class="search-trigger-icon" />
+        <span class="search-trigger-text">Search...</span>
+        <kbd class="search-trigger-kbd">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+      </button>
+
+      <GlobalSearchDropdown :visible="searchVisible" @close="searchVisible = false" />
 
       <!-- Notifications -->
       <div data-tour="notification-bell" style="display: inline-flex">
@@ -65,10 +64,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import NotificationDropdown from './NotificationDropdown.vue'
+import GlobalSearchDropdown from './GlobalSearchDropdown.vue'
 import {
   SearchOutlined, DownOutlined,
   UserOutlined, LogoutOutlined, MenuOutlined,
@@ -77,7 +77,22 @@ import {
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
-const searchQuery = ref('')
+const searchVisible = ref(false)
+const isMac = (navigator.userAgentData?.platform ?? navigator.platform ?? '').toUpperCase().includes('MAC')
+
+function handleGlobalKeydown(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault()
+    searchVisible.value = !searchVisible.value
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleGlobalKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleGlobalKeydown)
+})
 
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
 
@@ -174,20 +189,60 @@ const profilePictureUrl = computed(() => {
   }
 }
 
-.header-search {
-  width: 240px;
+.header-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-width: 220px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
 }
+.header-search-trigger:hover {
+  border-color: var(--color-text-muted);
+  background: var(--color-bg-hover);
+}
+.header-search-trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.search-trigger-icon {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.search-trigger-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+.search-trigger-kbd {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  line-height: 1.3;
+}
+
 @media (max-width: 767px) {
-  .header-search {
+  .header-search-trigger {
+    min-width: auto;
+    padding: 6px 8px;
+  }
+  .search-trigger-text,
+  .search-trigger-kbd {
     display: none;
   }
-}
-.header-search :deep(.ant-input) {
-  font-size: 13px;
-}
-.search-icon {
-  color: var(--color-text-muted);
-  font-size: 14px;
 }
 
 .header-profile {

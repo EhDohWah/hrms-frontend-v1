@@ -15,7 +15,7 @@
         </div>
         <a-space v-if="item">
           <a-button
-            v-if="authStore.canUpdate('resignation') && item.status === 'pending'"
+            v-if="authStore.canUpdate('resignations') && item.status === 'pending'"
             type="primary"
             :loading="acknowledging"
             @click="handleAcknowledge"
@@ -23,7 +23,7 @@
             <CheckOutlined /> Acknowledge
           </a-button>
           <a-button
-            v-if="authStore.canUpdate('resignation') && item.status === 'pending'"
+            v-if="authStore.canUpdate('resignations') && item.status === 'pending'"
             danger
             :loading="rejecting"
             @click="handleReject"
@@ -31,7 +31,7 @@
             <CloseOutlined /> Reject
           </a-button>
           <a-button
-            v-if="authStore.canRead('resignation') && item.status === 'acknowledged'"
+            v-if="authStore.canRead('resignations') && item.status === 'acknowledged'"
             @click="handleDownloadLetter"
             :loading="downloading"
           >

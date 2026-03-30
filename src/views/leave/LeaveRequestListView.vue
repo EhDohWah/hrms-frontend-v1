@@ -23,13 +23,13 @@
           <a-select-option value="cancelled">Cancelled</a-select-option>
         </a-select>
         <a-button
-          v-if="selectedRowKeys.length > 0 && authStore.canEdit('leaves_admin')"
+          v-if="selectedRowKeys.length > 0 && authStore.canDelete('leave_requests')"
           danger
           @click="handleBulkDelete"
         >
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
-        <a-button v-if="authStore.canEdit('leaves_admin')" type="primary" @click="openCreate">
+        <a-button v-if="authStore.canCreate('leave_requests')" type="primary" @click="openCreate">
           <template #icon><PlusOutlined /></template>
           Add Leave Request
         </a-button>
@@ -43,7 +43,7 @@
         :loading="loading"
         :row-key="(r) => r.id"
         :pagination="tablePagination"
-        :row-selection="authStore.canEdit('leaves_admin') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :row-selection="authStore.canDelete('leave_requests') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
         :scroll="{ x: 'max-content', y: 600 }"
         :virtual="true"
         @change="handleTableChange"
@@ -72,7 +72,7 @@
           <template v-else-if="column.key === 'actions'">
             <a-space :size="0">
               <a-button
-                v-if="authStore.canEdit('leaves_admin')"
+                v-if="authStore.canUpdate('leave_requests')"
                 size="small"
                 type="link"
                 @click="openEdit(record)"
@@ -80,7 +80,7 @@
                 Edit
               </a-button>
               <a-button
-                v-if="authStore.canEdit('leaves_admin')"
+                v-if="authStore.canDelete('leave_requests')"
                 size="small"
                 type="link"
                 danger
@@ -476,7 +476,7 @@ async function fetchBalance(leaveTypeId) {
   try {
     const { data } = await leaveApi.balanceShow(form.employee_id, leaveTypeId)
     const bal = data?.data
-    itemBalances[leaveTypeId] = bal?.remaining_days ?? 0
+    itemBalances[leaveTypeId] = parseFloat(bal?.remaining_days) || 0
   } catch {
     itemBalances[leaveTypeId] = 0
   } finally {

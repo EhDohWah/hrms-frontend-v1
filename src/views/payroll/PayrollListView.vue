@@ -287,8 +287,8 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const getSignal = useAbortController()
 
-const canCreate = computed(() => authStore.canCreate('employee_salary'))
-const canDelete = computed(() => authStore.canDelete('employee_salary'))
+const canCreate = computed(() => authStore.canCreate('employee_salaries'))
+const canDelete = computed(() => authStore.canDelete('employee_salaries'))
 
 // ═══════════════════════════ Table Columns ═══════════════════════════
 const columns = [

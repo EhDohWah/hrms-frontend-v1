@@ -71,7 +71,7 @@ export const routes = [
         path: 'leave-requests',
         name: 'leave-requests',
         component: () => import('@/views/leave/LeaveRequestListView.vue'),
-        meta: { title: 'Leave Requests', permission: 'leaves_admin' },
+        meta: { title: 'Leave Requests', permission: 'leave_requests' },
       },
       {
         path: 'leave-balances',
@@ -85,7 +85,7 @@ export const routes = [
         path: 'attendance',
         name: 'attendance',
         component: () => import('@/views/attendance/AttendanceListView.vue'),
-        meta: { title: 'Attendance', permission: 'attendance_admin' },
+        meta: { title: 'Attendance', permission: 'attendance' },
       },
 
       // ---- Holidays ----
@@ -101,19 +101,19 @@ export const routes = [
         path: 'grants',
         name: 'grants',
         component: () => import('@/views/grants/GrantListView.vue'),
-        meta: { title: 'Grants', permission: 'grants_list' },
+        meta: { title: 'Grants', permission: 'grants' },
       },
       {
         path: 'grants/:id',
         name: 'grant-detail',
         component: () => import('@/views/grants/GrantDetailView.vue'),
-        meta: { title: 'Grant Detail', permission: 'grants_list' },
+        meta: { title: 'Grant Detail', permission: 'grants' },
       },
       {
         path: 'grant-positions',
         name: 'grant-positions',
         component: () => import('@/views/grants/GrantPositionListView.vue'),
-        meta: { title: 'Grant Positions', permission: 'grant_position' },
+        meta: { title: 'Grant Positions', permission: 'grant_positions' },
       },
 
       // ---- Recruitment ----
@@ -135,13 +135,13 @@ export const routes = [
         path: 'training',
         name: 'training',
         component: () => import('@/views/training/TrainingListView.vue'),
-        meta: { title: 'Training', permission: 'training_list' },
+        meta: { title: 'Training', permission: 'trainings' },
       },
       {
         path: 'training/:id',
         name: 'training-detail',
         component: () => import('@/views/training/TrainingDetailView.vue'),
-        meta: { title: 'Training Detail', permission: 'training_list' },
+        meta: { title: 'Training Detail', permission: 'trainings' },
       },
       {
         path: 'training-types',
@@ -161,7 +161,7 @@ export const routes = [
         path: 'payroll',
         name: 'payroll',
         component: () => import('@/views/payroll/PayrollListView.vue'),
-        meta: { title: 'Payroll', permission: 'employee_salary' },
+        meta: { title: 'Payroll', permission: 'employee_salaries' },
       },
 
       // ---- Personnel Actions ----
@@ -177,7 +177,7 @@ export const routes = [
         path: 'transfers',
         name: 'transfers',
         component: () => import('@/views/transfers/TransferListView.vue'),
-        meta: { title: 'Transfers', permission: 'transfer' },
+        meta: { title: 'Transfers', permission: 'transfers' },
       },
 
       // ---- Resignations ----
@@ -185,13 +185,13 @@ export const routes = [
         path: 'resignations',
         name: 'resignations',
         component: () => import('@/views/resignations/ResignationListView.vue'),
-        meta: { title: 'Resignations', permission: 'resignation' },
+        meta: { title: 'Resignations', permission: 'resignations' },
       },
       {
         path: 'resignations/:id',
         name: 'resignation-detail',
         component: () => import('@/views/resignations/ResignationDetailView.vue'),
-        meta: { title: 'Resignation Detail', permission: 'resignation' },
+        meta: { title: 'Resignation Detail', permission: 'resignations' },
       },
 
       // ---- Reports ----
@@ -199,7 +199,7 @@ export const routes = [
         path: 'reports',
         name: 'reports',
         component: () => import('@/views/reports/ReportsView.vue'),
-        meta: { title: 'Reports', permission: 'report_list' },
+        meta: { title: 'Reports', permission: 'reports' },
       },
 
       // ---- Data Import ----
@@ -293,7 +293,7 @@ export const routes = [
         path: 'activity-logs',
         name: 'activity-logs',
         component: () => import('@/views/activity-logs/ActivityLogListView.vue'),
-        meta: { title: 'Activity Log' },
+        meta: { title: 'Activity Log', permission: 'activity_logs' },
       },
 
       // ---- Recycle Bin ----
@@ -301,7 +301,7 @@ export const routes = [
         path: 'recycle-bin',
         name: 'recycle-bin',
         component: () => import('@/views/recycle-bin/RecycleBinView.vue'),
-        meta: { title: 'Recycle Bin', permission: 'recycle_bin_list' },
+        meta: { title: 'Recycle Bin', permission: 'recycle_bin' },
       },
 
       // ---- Catch-all placeholder ----

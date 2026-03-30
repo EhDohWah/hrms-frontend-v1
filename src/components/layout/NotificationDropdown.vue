@@ -95,6 +95,8 @@ import {
   CalendarOutlined,
   SettingOutlined,
   FileTextOutlined,
+  SolutionOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons-vue'
 
 const dayjs = inject('$dayjs')
@@ -105,8 +107,10 @@ const visible = ref(false)
 const categoryIconMap = {
   employee: TeamOutlined,
   grants: TrophyOutlined,
+  recruitment: SolutionOutlined,
   payroll: DollarOutlined,
   leaves: CalendarOutlined,
+  holidays: ScheduleOutlined,
   system: SettingOutlined,
   import: FileTextOutlined,
 }

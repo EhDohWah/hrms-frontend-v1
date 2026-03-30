@@ -25,12 +25,12 @@ import {
 const auth = useAuthStore()
 
 const allReports = [
-  { label: 'Leave Report', to: '/reports', icon: markRaw(CalendarOutlined), color: '#d97706', permission: 'report_list' },
-  { label: 'Employee Report', to: '/reports', icon: markRaw(TeamOutlined), color: '#2563eb', permission: 'report_list' },
-  { label: 'Payroll Report', to: '/reports', icon: markRaw(DollarOutlined), color: '#16a34a', permission: 'report_list' },
-  { label: 'Interview Report', to: '/reports', icon: markRaw(ScheduleOutlined), color: '#7c3aed', permission: 'report_list' },
-  { label: 'Job Offer Report', to: '/reports', icon: markRaw(SolutionOutlined), color: '#0d9488', permission: 'report_list' },
-  { label: 'All Reports', to: '/reports', icon: markRaw(FileTextOutlined), color: '#6b7280', permission: 'report_list' },
+  { label: 'Leave Report', to: '/reports', icon: markRaw(CalendarOutlined), color: '#d97706', permission: 'reports' },
+  { label: 'Employee Report', to: '/reports', icon: markRaw(TeamOutlined), color: '#2563eb', permission: 'reports' },
+  { label: 'Payroll Report', to: '/reports', icon: markRaw(DollarOutlined), color: '#16a34a', permission: 'reports' },
+  { label: 'Interview Report', to: '/reports', icon: markRaw(ScheduleOutlined), color: '#7c3aed', permission: 'reports' },
+  { label: 'Job Offer Report', to: '/reports', icon: markRaw(SolutionOutlined), color: '#0d9488', permission: 'reports' },
+  { label: 'All Reports', to: '/reports', icon: markRaw(FileTextOutlined), color: '#6b7280', permission: 'reports' },
 ]
 
 const visibleReports = computed(() =>

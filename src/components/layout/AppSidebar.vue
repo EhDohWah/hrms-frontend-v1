@@ -147,8 +147,8 @@ const navSections = computed(() => [
     title: 'Grants',
     tourKey: 'grants-menu',
     items: [
-      { key: 'grants', label: 'Grants', icon: TrophyOutlined, route: 'grants', permission: 'grants_list' },
-      { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grant_position' },
+      { key: 'grants', label: 'Grants', icon: TrophyOutlined, route: 'grants', permission: 'grants' },
+      { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grant_positions' },
     ],
   },
   {
@@ -164,14 +164,14 @@ const navSections = computed(() => [
     tourKey: 'management-menu',
     items: [
       { key: 'employees', label: 'Employees', icon: TeamOutlined, route: 'employees', permission: 'employees' },
-      { key: 'payroll', label: 'Payroll', icon: DollarOutlined, route: 'payroll', permission: 'employee_salary' },
+      { key: 'payroll', label: 'Payroll', icon: DollarOutlined, route: 'payroll', permission: 'employee_salaries' },
     ],
   },
   {
     title: 'Leave',
     tourKey: 'leave-menu',
     items: [
-      { key: 'leave-requests', label: 'Leave Requests', icon: CalendarOutlined, route: 'leave-requests', permission: 'leaves_admin' },
+      { key: 'leave-requests', label: 'Leave Requests', icon: CalendarOutlined, route: 'leave-requests', permission: 'leave_requests' },
       { key: 'leave-balances', label: 'Leave Balances', icon: ScheduleOutlined, route: 'leave-balances', permission: 'leave_balances' },
       { key: 'leave-types', label: 'Leave Types', icon: FileTextOutlined, route: 'leave-types', permission: 'leave_types' },
     ],
@@ -180,7 +180,7 @@ const navSections = computed(() => [
     title: 'Attendance',
     tourKey: 'attendance-menu',
     items: [
-      { key: 'attendance', label: 'Attendance', icon: AuditOutlined, route: 'attendance', permission: 'attendance_admin' },
+      { key: 'attendance', label: 'Attendance', icon: AuditOutlined, route: 'attendance', permission: 'attendance' },
       { key: 'holidays', label: 'Holidays', icon: SmileOutlined, route: 'holidays', permission: 'holidays' },
     ],
   },
@@ -188,7 +188,7 @@ const navSections = computed(() => [
     title: 'Training',
     tourKey: 'training-menu',
     items: [
-      { key: 'training', label: 'Training', icon: ReadOutlined, route: 'training', permission: 'training_list' },
+      { key: 'training', label: 'Training', icon: ReadOutlined, route: 'training', permission: 'trainings' },
       { key: 'training-types', label: 'Training Types', icon: OrderedListOutlined, route: 'training-types', permission: 'training_types' },
       { key: 'employee-training', label: 'Employee Training', icon: SolutionOutlined, route: 'employee-training', permission: 'employee_training' },
     ],
@@ -198,15 +198,15 @@ const navSections = computed(() => [
     tourKey: 'hrm-menu',
     items: [
       { key: 'personnel-actions', label: 'Personnel Actions', icon: SwapOutlined, route: 'personnel-actions', permission: 'personnel_actions' },
-      { key: 'transfers', label: 'Transfers', icon: SwapOutlined, route: 'transfers', permission: 'transfer' },
-      { key: 'resignations', label: 'Resignations', icon: LogoutOutlined, route: 'resignations', permission: 'resignation' },
+      { key: 'transfers', label: 'Transfers', icon: SwapOutlined, route: 'transfers', permission: 'transfers' },
+      { key: 'resignations', label: 'Resignations', icon: LogoutOutlined, route: 'resignations', permission: 'resignations' },
     ],
   },
   {
     title: 'Reports',
     tourKey: 'reports-menu',
     items: [
-      { key: 'reports', label: 'Reports', icon: BarChartOutlined, route: 'reports', permission: 'report_list' },
+      { key: 'reports', label: 'Reports', icon: BarChartOutlined, route: 'reports', permission: 'reports' },
     ],
   },
   {
@@ -249,8 +249,8 @@ const navSections = computed(() => [
     title: 'System',
     tourKey: 'system-menu',
     items: [
-      { key: 'activity-logs', label: 'Activity Log', icon: HistoryOutlined, route: 'activity-logs' },
-      { key: 'recycle-bin', label: 'Recycle Bin', icon: DeleteOutlined, route: 'recycle-bin', permission: 'recycle_bin_list' },
+      { key: 'activity-logs', label: 'Activity Log', icon: HistoryOutlined, route: 'activity-logs', permission: 'activity_logs' },
+      { key: 'recycle-bin', label: 'Recycle Bin', icon: DeleteOutlined, route: 'recycle-bin', permission: 'recycle_bin' },
     ],
   },
 ])

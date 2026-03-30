@@ -16,10 +16,10 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('grants_list')" danger @click="handleBulkDelete">
+        <a-button v-if="selectedRowKeys.length > 0 && authStore.canDelete('grants')" danger @click="handleBulkDelete">
           Delete {{ selectedRowKeys.length }} Selected
         </a-button>
-        <a-button v-if="authStore.canCreate('grants_list')" type="primary" @click="openCreate">
+        <a-button v-if="authStore.canCreate('grants')" type="primary" @click="openCreate">
           <PlusOutlined /> Add Grant
         </a-button>
       </div>
@@ -32,7 +32,7 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
-        :row-selection="authStore.canDelete('grants_list') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :row-selection="authStore.canDelete('grants') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
         @change="handleTableChange"
         :expandedRowKeys="expandedKeys"
         @expandedRowsChange="(keys) => expandedKeys = keys"
@@ -54,8 +54,8 @@
           <template v-else-if="column.key === 'actions'">
             <a-space>
               <a-button size="small" type="link" @click="openView(record)">View</a-button>
-              <a-button v-if="authStore.canUpdate('grants_list')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
-              <a-button v-if="authStore.canDelete('grants_list')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
+              <a-button v-if="authStore.canUpdate('grants')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
+              <a-button v-if="authStore.canDelete('grants')" size="small" type="link" danger @click="handleDelete(record)">Delete</a-button>
             </a-space>
           </template>
         </template>
@@ -66,7 +66,7 @@
             <div class="expanded-header">
               <span class="expanded-title">Grant Positions</span>
               <a-button
-                v-if="authStore.canCreate('grants_list')"
+                v-if="authStore.canCreate('grants')"
                 size="small"
                 type="primary"
                 @click="openCreatePosition(record)"
@@ -97,8 +97,8 @@
                 </template>
                 <template v-else-if="column.key === 'pos_actions'">
                   <a-space>
-                    <a-button v-if="authStore.canUpdate('grants_list')" size="small" type="link" @click="openEditPosition(pos, record)">Edit</a-button>
-                    <a-button v-if="authStore.canDelete('grants_list')" size="small" type="link" danger @click="handleDeletePosition(pos)">Delete</a-button>
+                    <a-button v-if="authStore.canUpdate('grants')" size="small" type="link" @click="openEditPosition(pos, record)">Edit</a-button>
+                    <a-button v-if="authStore.canDelete('grants')" size="small" type="link" danger @click="handleDeletePosition(pos)">Delete</a-button>
                   </a-space>
                 </template>
               </template>

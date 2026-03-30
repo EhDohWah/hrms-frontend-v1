@@ -33,7 +33,7 @@
         :row-key="(r) => r.id"
         :pagination="tablePagination"
         :row-selection="authStore.canDelete('leave_types') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
-        :scroll="{ x: 'max-content' }"
+        :scroll="{ x: 800 }"
         @change="handleTableChange"
         size="middle"
       >
@@ -42,7 +42,9 @@
             {{ record.default_duration != null ? record.default_duration + ' days' : '—' }}
           </template>
           <template v-else-if="column.key === 'description'">
-            {{ record.description || '—' }}
+            <a-tooltip :title="record.description || undefined" placement="topLeft">
+              {{ record.description || '—' }}
+            </a-tooltip>
           </template>
           <template v-else-if="column.key === 'requires_attachment'">
             <a-tag :color="record.requires_attachment ? 'orange' : 'default'" size="small">
@@ -120,7 +122,7 @@ const form = reactive({ name: '', default_duration: null, description: '', requi
 const columns = [
   { title: 'Name', dataIndex: 'name', width: 200, sorter: true },
   { title: 'Default Duration', key: 'default_duration', width: 140, align: 'center' },
-  { title: 'Description', key: 'description', ellipsis: true },
+  { title: 'Description', key: 'description', ellipsis: { showTitle: false } },
   { title: 'Requires Attachment', key: 'requires_attachment', width: 160, align: 'center' },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ]

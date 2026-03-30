@@ -5,4 +5,5 @@ export const optionsApi = {
   positions: () => client.get('/positions/options'),
   sites: () => client.get('/sites/options'),
   sectionDepartments: (params) => client.get('/section-departments/options', { params }),
+  grants: () => client.get('/grants/options'),
 }

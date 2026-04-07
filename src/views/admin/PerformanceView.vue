@@ -24,37 +24,62 @@
       </div>
     </div>
 
-    <!-- Endpoints Table -->
-    <a-card title="Endpoint Performance" :bordered="false" :body-style="{ padding: 0 }">
+    <!-- Hourly Breakdown Table -->
+    <a-card title="Hourly Breakdown" :bordered="false" :body-style="{ padding: 0 }">
+      <template #extra>
+        <span class="text-muted" style="font-size: 12px;">{{ metricsData.date || 'Today' }}</span>
+      </template>
       <a-table
         :columns="columns"
-        :data-source="endpoints"
+        :data-source="hourlyRows"
         :loading="loading"
         :pagination="false"
-        :row-key="(r) => r.endpoint"
+        :row-key="(r) => r.hour"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'endpoint'">
-            <span class="font-mono" style="font-size: 12px;">{{ record.endpoint }}</span>
+          <template v-if="column.key === 'hour'">
+            <span class="font-mono" style="font-size: 12px;">{{ record.hour }}:00</span>
           </template>
           <template v-else-if="column.key === 'avg_time'">
             <span :class="{ 'text-danger': record.avg_time > 2000, 'text-warning': record.avg_time > 1000 }">
               {{ formatNumber(record.avg_time) }}ms
             </span>
           </template>
-          <template v-else-if="column.key === 'max_time'">
-            <span class="text-muted">{{ formatNumber(record.max_time) }}ms</span>
+          <template v-else-if="column.key === 'avg_memory'">
+            <span class="text-muted">{{ record.avg_memory }}MB</span>
           </template>
           <template v-else-if="column.key === 'requests'">
             {{ formatNumber(record.requests) }}
           </template>
-          <template v-else-if="column.key === 'slow_count'">
-            <a-tag v-if="record.slow_count > 0" color="orange" size="small">{{ record.slow_count }}</a-tag>
-            <span v-else class="text-muted">0</span>
-          </template>
+        </template>
+        <template #emptyText>
+          <div style="padding: 24px; text-align: center; color: var(--color-text-muted);">
+            No hourly data recorded yet. Performance data populates as API requests are made.
+          </div>
         </template>
       </a-table>
+    </a-card>
+
+    <!-- Daily Totals -->
+    <a-card title="Daily Totals" :bordered="false" style="margin-top: 16px;">
+      <a-descriptions :column="{ xs: 1, sm: 2, md: 4 }" size="small" bordered>
+        <a-descriptions-item label="Total Requests">
+          {{ formatNumber(dailyTotals.total_requests) }}
+        </a-descriptions-item>
+        <a-descriptions-item label="Total Execution Time">
+          {{ formatNumber(dailyTotals.total_execution_time_ms) }}ms
+        </a-descriptions-item>
+        <a-descriptions-item label="Total Memory Usage">
+          {{ dailyTotals.total_memory_usage_mb }}MB
+        </a-descriptions-item>
+        <a-descriptions-item label="Slow Requests">
+          <a-tag v-if="dailyTotals.slow_queries > 0" color="orange" size="small">
+            {{ dailyTotals.slow_queries }}
+          </a-tag>
+          <span v-else class="text-muted">0</span>
+        </a-descriptions-item>
+      </a-descriptions>
     </a-card>
   </div>
 </template>
@@ -70,7 +95,7 @@ import { STAT_COLORS } from '@/constants/colors'
 const appStore = useAppStore()
 const loading = ref(true)
 const summary = ref({ avg_response_ms: 0, total_requests: 0, slow_requests: 0, memory_avg_mb: 0 })
-const endpoints = ref([])
+const metricsData = ref({ date: '', daily: {}, hourly: [] })
 
 const summaryCards = computed(() => [
   { label: 'Avg Response', value: `${summary.value.avg_response_ms}ms`, icon: markRaw(ThunderboltOutlined), ...STAT_COLORS.blue },
@@ -79,12 +104,30 @@ const summaryCards = computed(() => [
   { label: 'Avg Memory', value: `${summary.value.memory_avg_mb}MB`, icon: markRaw(ClockCircleOutlined), ...STAT_COLORS.pink },
 ])
 
+const hourlyRows = computed(() => {
+  return (metricsData.value.hourly || []).map(h => ({
+    hour: h.hour,
+    requests: h.requests,
+    avg_time: h.avg_execution_time_ms,
+    avg_memory: h.avg_memory_usage_mb,
+  }))
+})
+
+const dailyTotals = computed(() => {
+  const d = metricsData.value.daily || {}
+  return {
+    total_requests: d.total_requests || 0,
+    total_execution_time_ms: d.total_execution_time_ms || 0,
+    total_memory_usage_mb: d.total_memory_usage_mb || 0,
+    slow_queries: d.slow_queries || 0,
+  }
+})
+
 const columns = [
-  { title: 'Endpoint', key: 'endpoint', width: 300 },
-  { title: 'Avg Time', key: 'avg_time', width: 120, align: 'right', sorter: (a, b) => a.avg_time - b.avg_time, defaultSortOrder: 'descend' },
-  { title: 'Max Time', key: 'max_time', width: 120, align: 'right' },
-  { title: 'Requests', key: 'requests', width: 100, align: 'right' },
-  { title: 'Slow (>2s)', key: 'slow_count', width: 100, align: 'center' },
+  { title: 'Hour', key: 'hour', width: 100 },
+  { title: 'Requests', key: 'requests', width: 120, align: 'right', sorter: (a, b) => a.requests - b.requests },
+  { title: 'Avg Response', key: 'avg_time', width: 140, align: 'right', sorter: (a, b) => a.avg_time - b.avg_time, defaultSortOrder: 'descend' },
+  { title: 'Avg Memory', key: 'avg_memory', width: 120, align: 'right' },
 ]
 
 async function fetchAll() {
@@ -98,7 +141,7 @@ async function fetchAll() {
       summary.value = summaryRes.value.data.data || summary.value
     }
     if (endpointsRes.status === 'fulfilled') {
-      endpoints.value = endpointsRes.value.data.data || []
+      metricsData.value = endpointsRes.value.data.data || metricsData.value
     }
   } catch { /* silent */ }
   finally { loading.value = false }

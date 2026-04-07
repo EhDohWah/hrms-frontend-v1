@@ -4,29 +4,29 @@
     <template v-else-if="health">
       <div class="health-rows">
         <router-link to="/admin/system-health" class="health-row">
-          <span class="health-indicator" :class="health.database?.status" />
+          <span class="health-indicator" :class="health.checks?.database?.status" />
           <span class="health-label">Database</span>
-          <span class="health-detail">{{ health.database?.response_ms }}ms</span>
+          <span class="health-detail">{{ health.checks?.database?.response_ms }}ms</span>
         </router-link>
         <router-link to="/admin/system-health" class="health-row">
-          <span class="health-indicator" :class="health.cache?.status" />
+          <span class="health-indicator" :class="health.checks?.cache?.status" />
           <span class="health-label">Cache</span>
-          <span class="health-detail">{{ health.cache?.driver }}</span>
+          <span class="health-detail">{{ health.checks?.cache?.driver }}</span>
         </router-link>
         <router-link to="/admin/system-health" class="health-row">
-          <span class="health-indicator" :class="health.storage?.status" />
+          <span class="health-indicator" :class="health.checks?.storage?.status" />
           <span class="health-label">Storage</span>
-          <span class="health-detail">{{ health.storage?.used_percent }}% used</span>
+          <span class="health-detail">{{ health.checks?.storage?.used_percent }}% used</span>
         </router-link>
         <router-link to="/admin/failed-jobs" class="health-row">
-          <span class="health-indicator" :class="health.queue?.status" />
+          <span class="health-indicator" :class="health.checks?.queue?.status" />
           <span class="health-label">Queue</span>
-          <span class="health-detail">{{ health.queue?.failed_jobs_24h }} failed</span>
+          <span class="health-detail">{{ health.checks?.queue?.failed_jobs_24h }} failed</span>
         </router-link>
         <router-link to="/admin/login-history" class="health-row">
           <span class="health-indicator healthy" />
           <span class="health-label">Logins</span>
-          <span class="health-detail">{{ health.logins?.today }} today, {{ health.logins?.failed_today }} failed</span>
+          <span class="health-detail">{{ health.checks?.logins?.today }} today, {{ health.checks?.logins?.failed_today }} failed</span>
         </router-link>
       </div>
       <div class="health-footer">
@@ -56,7 +56,7 @@ async function fetchHealth() {
   loading.value = true
   try {
     const res = await systemApi.health()
-    health.value = res.data.data
+    health.value = res.data.data || null
     lastChecked.value = dayjs().format('HH:mm')
   } catch { /* silent */ }
   finally { loading.value = false }

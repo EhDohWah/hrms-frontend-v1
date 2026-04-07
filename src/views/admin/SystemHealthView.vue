@@ -39,36 +39,36 @@ const lastChecked = ref('')
 
 const healthItems = computed(() => {
   if (!health.value) return []
-  const h = health.value
+  const checks = health.value.checks || {}
   return [
     {
-      key: 'database', title: 'Database', status: h.database?.status || 'down',
-      details: { 'Response Time': `${h.database?.response_ms || '—'}ms` },
+      key: 'database', title: 'Database', status: checks.database?.status || 'down',
+      details: { 'Response Time': `${checks.database?.response_ms ?? '—'}ms` },
     },
     {
-      key: 'cache', title: 'Cache', status: h.cache?.status || 'down',
-      details: { 'Driver': h.cache?.driver || '—' },
+      key: 'cache', title: 'Cache', status: checks.cache?.status || 'down',
+      details: { 'Driver': checks.cache?.driver || '—' },
     },
     {
-      key: 'storage', title: 'Storage', status: h.storage?.status || 'down',
+      key: 'storage', title: 'Storage', status: checks.storage?.status || 'down',
       details: {
-        'Used': `${h.storage?.used_gb || 0} GB / ${h.storage?.total_gb || 0} GB`,
-        'Usage': `${h.storage?.used_percent || 0}%`,
+        'Used': `${checks.storage?.used_gb || 0} GB / ${checks.storage?.total_gb || 0} GB`,
+        'Usage': `${checks.storage?.used_percent || 0}%`,
       },
     },
     {
-      key: 'queue', title: 'Queue', status: h.queue?.status || 'down',
+      key: 'queue', title: 'Queue', status: checks.queue?.status || 'down',
       details: {
-        'Pending Jobs': h.queue?.pending_jobs ?? '—',
-        'Failed (24h)': h.queue?.failed_jobs_24h ?? '—',
+        'Pending Jobs': checks.queue?.pending_jobs ?? '—',
+        'Failed (24h)': checks.queue?.failed_jobs_24h ?? '—',
       },
     },
     {
       key: 'logins', title: 'Login Activity', status: 'healthy',
       details: {
-        'Logins Today': h.logins?.today ?? '—',
-        'Failed Today': h.logins?.failed_today ?? '—',
-        'Lockouts': h.logins?.locked_out_today ?? '—',
+        'Logins Today': checks.logins?.today ?? '—',
+        'Failed Today': checks.logins?.failed_today ?? '—',
+        'Lockouts': checks.logins?.locked_out_today ?? '—',
       },
     },
   ]

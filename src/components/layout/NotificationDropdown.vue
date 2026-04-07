@@ -50,6 +50,13 @@
             </div>
             <div class="notif-item-body">
               <p class="notif-item-message">{{ notif.message || notif.data?.message || 'Notification' }}</p>
+              <div v-if="getErrorDetails(notif)" class="notif-item-details">
+                <p
+                  v-for="(line, i) in getErrorLines(notif)"
+                  :key="i"
+                  class="notif-detail-line"
+                >{{ line }}</p>
+              </div>
               <span class="notif-item-time">{{ timeAgo(notif.created_at) }}</span>
             </div>
           </div>
@@ -131,6 +138,16 @@ function getCategoryIcon(category) {
 function timeAgo(date) {
   if (!date) return ''
   return dayjs(date).fromNow()
+}
+
+function getErrorDetails(notif) {
+  return notif.error_details || notif.data?.error_details || null
+}
+
+function getErrorLines(notif) {
+  const details = getErrorDetails(notif)
+  if (!details) return []
+  return String(details).split('\n').filter(Boolean).slice(0, 3)
 }
 
 async function handleItemClick(notif) {
@@ -265,6 +282,21 @@ watch(visible, (open) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.notif-item-details {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: var(--color-bg-hover, #f9fafb);
+  border-radius: var(--radius-sm, 4px);
+  border-left: 2px solid var(--color-warning, #faad14);
+}
+.notif-detail-line {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--color-text-secondary, #6b7280);
+  word-break: break-word;
 }
 
 .notif-item-time {

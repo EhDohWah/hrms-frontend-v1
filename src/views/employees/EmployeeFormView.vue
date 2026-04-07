@@ -52,6 +52,31 @@
         </div>
       </div>
 
+      <!-- Duplicate Warning Banner -->
+      <a-alert
+        v-if="duplicateWarnings.length && !isEditMode"
+        type="warning"
+        show-icon
+        banner
+        closable
+        class="duplicate-warning"
+        @close="duplicateWarnings = []"
+      >
+        <template #message>
+          Possible duplicate employee{{ duplicateWarnings.length > 1 ? 's' : '' }} found
+        </template>
+        <template #description>
+          <div v-for="dup in duplicateWarnings" :key="dup.id" class="duplicate-item">
+            <strong>{{ dup.first_name_en }} {{ dup.last_name_en }}</strong>
+            <span class="duplicate-meta">(Staff ID {{ dup.staff_id }}, {{ dup.organization }}{{ dup.status ? ` — ${dup.status}` : '' }})</span>
+            <span class="duplicate-match">Matched by {{ MATCH_TYPE_LABELS[dup.match_type] ?? dup.match_type }}</span>
+            <router-link :to="{ name: 'employee-detail', params: { id: dup.id } }" target="_blank" class="duplicate-link">
+              View existing record
+            </router-link>
+          </div>
+        </template>
+      </a-alert>
+
       <!-- Content: tabs + sidebar -->
       <div class="form-body">
         <div class="form-main">
@@ -59,7 +84,13 @@
             <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
               <!-- ── Group 1: Form tabs (saved via top Save button) ── -->
               <a-tab-pane key="basic_info" tab="Basic Info">
-                <BasicInfoTab :form="form" :readonly="!canSave" />
+                <BasicInfoTab
+                  :form="form"
+                  :readonly="!canSave"
+                  @staff-id-blur="checkDuplicateByStaffId"
+                  @name-blur="checkDuplicateByNameDob"
+                  @dob-change="checkDuplicateByNameDob"
+                />
               </a-tab-pane>
               <a-tab-pane key="identification" tab="Identification">
                 <IdentificationTab
@@ -144,7 +175,7 @@
       <ResignationModal
         v-model:open="resignationModalOpen"
         :employee="employee"
-        @submitted="loadEmployee"
+        @submitted="onResignationSubmitted"
       />
     </template>
   </div>
@@ -159,6 +190,7 @@ import { createVNode } from 'vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeApi } from '@/api'
+import { useAbortController } from '@/composables/useAbortController'
 import { ArrowLeftOutlined, DatabaseOutlined, SwapOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 
 import ActivityTimeline from '@/components/ActivityTimeline.vue'
@@ -221,6 +253,41 @@ const savedSnapshot = ref(JSON.stringify(defaultFormValues))
 
 const isDirty = computed(() => JSON.stringify(form) !== savedSnapshot.value)
 
+// ======================== Duplicate Detection ========================
+const duplicateWarnings = ref([])
+const getStaffIdSignal = useAbortController()
+const getNameDobSignal = useAbortController()
+
+const MATCH_TYPE_LABELS = {
+  staff_id: 'Staff ID',
+  name_dob: 'Name + Date of Birth',
+  identification: 'ID Number',
+}
+
+async function checkDuplicateByStaffId() {
+  if (isEditMode.value || !form.organization || !form.staff_id) return
+  await runDuplicateCheck({ organization: form.organization, staff_id: form.staff_id }, 'staff_id')
+}
+
+async function checkDuplicateByNameDob() {
+  if (isEditMode.value || !form.first_name_en || !form.date_of_birth) return
+  const params = { organization: form.organization, first_name_en: form.first_name_en, date_of_birth: form.date_of_birth }
+  if (form.last_name_en) params.last_name_en = form.last_name_en
+  await runDuplicateCheck(params, 'name_dob')
+}
+
+async function runDuplicateCheck(params, checkType) {
+  try {
+    const signal = checkType === 'staff_id' ? getStaffIdSignal() : getNameDobSignal()
+    const { data } = await employeeApi.checkDuplicate(params, { signal })
+    const newMatches = data?.data || []
+    const kept = duplicateWarnings.value.filter(d => d.match_type !== checkType)
+    duplicateWarnings.value = [...kept, ...newMatches]
+  } catch {
+    // No-op: duplicate check is advisory; errors must not block form submission.
+  }
+}
+
 // ======================== Page Title ========================
 const pageTitle = computed(() => {
   if (!isEditMode.value) return 'New Employee'
@@ -243,6 +310,15 @@ function onTabChange(key) {
 }
 
 watch(() => route.hash, syncTabFromHash)
+
+// When navigating from create → edit (same component reused), onMounted won't fire.
+// Watch the route param so loadEmployee runs for the new ID.
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadEmployee()
+    syncTabFromHash()
+  }
+})
 
 // ======================== Dirty Guard ========================
 onBeforeRouteLeave((_to, _from, next) => {
@@ -329,6 +405,30 @@ function buildPayload() {
   return payload
 }
 
+// Maps initials to their required gender. Omitted initials (e.g. Dr/ดร) are gender-neutral.
+const INITIAL_GENDER_MAP = {
+  'Mr': 'M', 'นาย': 'M',
+  'Mrs': 'F', 'Ms': 'F', 'นาง': 'F', 'นางสาว': 'F',
+}
+
+function validateInitialGender() {
+  const checks = [
+    { initial: form.initial_en, label: 'English' },
+    { initial: form.initial_th, label: 'Thai' },
+  ]
+  for (const { initial, label } of checks) {
+    if (!initial || !form.gender) continue
+    const requiredGender = INITIAL_GENDER_MAP[initial]
+    if (requiredGender && requiredGender !== form.gender) {
+      const genderWord = form.gender === 'M' ? 'Male' : 'Female'
+      activeTab.value = 'basic_info'
+      message.warning(`${label} initial "${initial}" does not match gender "${genderWord}"`)
+      return false
+    }
+  }
+  return true
+}
+
 function validateForm() {
   if (!form.organization) { activeTab.value = 'basic_info'; message.warning('Organization is required'); return false }
   if (!form.staff_id) { activeTab.value = 'basic_info'; message.warning('Staff ID is required'); return false }
@@ -336,6 +436,8 @@ function validateForm() {
   if (!form.gender) { activeTab.value = 'basic_info'; message.warning('Gender is required'); return false }
   if (!form.date_of_birth) { activeTab.value = 'basic_info'; message.warning('Date of Birth is required'); return false }
   if (!form.status) { activeTab.value = 'basic_info'; message.warning('Status is required'); return false }
+
+  if (!validateInitialGender()) return false
 
   if (form.identification_type && !form.identification_number) {
     activeTab.value = 'identification'
@@ -376,6 +478,12 @@ async function handleSave() {
     }
   }
   saving.value = false
+}
+
+// ======================== Resignation ========================
+function onResignationSubmitted() {
+  takeSnapshot()
+  router.push({ name: 'employees' })
 }
 
 // ======================== Profile Picture ========================
@@ -515,6 +623,37 @@ onBeforeUnmount(() => {
 }
 .form-main :deep(.ant-tabs-tab-active) .live-tab-label {
   color: var(--color-primary);
+}
+
+/* Duplicate warning banner */
+.duplicate-warning {
+  margin-bottom: 16px;
+  border-radius: var(--radius-md);
+}
+.duplicate-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+}
+.duplicate-item:not(:last-child) {
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.duplicate-meta {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.duplicate-match {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.duplicate-link {
+  font-size: 13px;
+  margin-left: auto;
 }
 
 </style>

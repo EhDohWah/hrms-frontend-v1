@@ -287,6 +287,50 @@ export const routes = [
         component: () => import('@/views/admin/RoleListView.vue'),
         meta: { title: 'Role Management', permission: 'roles' },
       },
+      {
+        path: 'admin/lookups',
+        name: 'lookups',
+        component: () => import('@/views/admin/LookupListView.vue'),
+        meta: { title: 'Lookup Data', permission: 'lookups' },
+      },
+      {
+        path: 'admin/login-history',
+        name: 'login-history',
+        component: () => import('@/views/admin/LoginHistoryView.vue'),
+        meta: { title: 'Login History', role: 'admin' },
+      },
+      {
+        path: 'admin/user-activity',
+        name: 'user-activity',
+        component: () => import('@/views/admin/UserActivityReportView.vue'),
+        meta: { title: 'User Activity', role: 'admin' },
+      },
+
+      // ---- System (admin role only) ----
+      {
+        path: 'admin/system-health',
+        name: 'system-health',
+        component: () => import('@/views/admin/SystemHealthView.vue'),
+        meta: { title: 'System Health', role: 'admin' },
+      },
+      {
+        path: 'admin/error-logs',
+        name: 'error-logs',
+        component: () => import('@/views/admin/ErrorLogListView.vue'),
+        meta: { title: 'Error Logs', role: 'admin' },
+      },
+      {
+        path: 'admin/failed-jobs',
+        name: 'failed-jobs',
+        component: () => import('@/views/admin/FailedJobListView.vue'),
+        meta: { title: 'Failed Jobs', role: 'admin' },
+      },
+      {
+        path: 'admin/performance',
+        name: 'performance',
+        component: () => import('@/views/admin/PerformanceView.vue'),
+        meta: { title: 'Performance', role: 'admin' },
+      },
 
       // ---- Activity Log ----
       {

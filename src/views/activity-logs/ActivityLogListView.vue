@@ -4,6 +4,9 @@
     <div class="page-header">
       <div class="page-header-stats">
         <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
+        <a-button size="small" :loading="exporting" @click="handleExport">
+          <DownloadOutlined /> Export CSV
+        </a-button>
       </div>
       <div class="filter-bar">
         <a-input
@@ -124,7 +127,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
-import { SearchOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { SearchOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { activityLogApi } from '@/api'
 import { formatDateTime } from '@/utils/formatters'
@@ -193,6 +197,33 @@ async function fetchItems() {
     // silent
   }
   loading.value = false
+}
+
+const exporting = ref(false)
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const params = cleanParams({
+      search: search.value || null,
+      subject_type: filters.subject_type,
+      action: filters.action,
+      date_from: dateRange.value?.[0] || null,
+      date_to: dateRange.value?.[1] || null,
+    })
+    const res = await activityLogApi.export(params)
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `activity-log-${dayjs().format('YYYY-MM-DD')}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch {
+    message.error('Failed to export activity log')
+  }
+  exporting.value = false
 }
 
 function onFilterChange() {

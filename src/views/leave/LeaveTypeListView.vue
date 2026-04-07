@@ -65,12 +65,12 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Leave Type' : 'Add Leave Type'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
+      destroy-on-close
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Name" required>
-          <a-input v-model:value="form.name" placeholder="Enter leave type name" :maxlength="100" />
+          <a-input ref="nameInputRef" v-model:value="form.name" placeholder="Enter leave type name" :maxlength="100" />
         </a-form-item>
         <a-form-item label="Default Duration (days)">
           <a-input-number
@@ -82,7 +82,7 @@
           />
         </a-form-item>
         <a-form-item label="Description">
-          <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" :maxlength="1000" />
+          <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" :maxlength="1000" show-count />
         </a-form-item>
         <a-form-item label="Requires Attachment">
           <a-switch
@@ -91,19 +91,34 @@
             un-checked-children="No"
           />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button
+            v-if="!editingItem"
+            :loading="savingAnother"
+            :disabled="saving"
+            @click="handleSaveAndAddAnother"
+          >
+            Save & Add Another
+          </a-button>
+          <a-button type="primary" html-type="submit" :loading="saving" :disabled="savingAnother">
+            {{ editingItem ? 'Update' : 'Save' }}
+          </a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, createVNode, onMounted } from 'vue'
+import { ref, reactive, computed, createVNode, onMounted, nextTick } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { leaveApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -112,7 +127,10 @@ const getSignal = useAbortController()
 const leaveTypes = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain: saving, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchTypes, reset: resetForm, focus: () => nextTick(() => nameInputRef.value?.focus?.()),
+})
+const nameInputRef = ref(null)
 const search = ref('')
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const modalVisible = ref(false)
@@ -181,10 +199,15 @@ function resetForm() {
   Object.assign(form, { name: '', default_duration: null, description: '', requires_attachment: false })
 }
 
+function focusName() {
+  nextTick(() => { nameInputRef.value?.focus?.() })
+}
+
 function openCreate() {
   editingItem.value = null
   resetForm()
   modalVisible.value = true
+  focusName()
 }
 
 function openEdit(record) {
@@ -198,10 +221,14 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.name) { message.warning('Name is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.name) return message.warning('Name is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await leaveApi.typeUpdate(editingItem.value.id, { ...form })
       message.success('Leave type updated')
@@ -210,17 +237,15 @@ async function handleSave() {
       message.success('Leave type created')
     }
     modalVisible.value = false
-    fetchTypes()
-  } catch (err) {
-    const resp = err.response?.data
-    if (resp?.errors) {
-      const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
-    } else {
-      message.error(resp?.message || 'Failed to save')
-    }
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await leaveApi.typeStore({ ...form })
+    message.success('Leave type created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

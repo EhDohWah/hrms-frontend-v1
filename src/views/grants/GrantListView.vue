@@ -115,11 +115,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Grant' : 'Add Grant'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 560px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Organization" required>
           <a-select v-model:value="form.organization" placeholder="Select organization">
             <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
@@ -137,6 +136,11 @@
         <a-form-item label="Description">
           <a-textarea v-model:value="form.description" placeholder="Enter grant description and objectives..." :rows="3" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
 
@@ -144,11 +148,10 @@
     <a-modal
       v-model:open="posModalVisible"
       :title="editingPosition ? 'Edit Position' : 'Add Position'"
-      @ok="handleSavePosition"
-      :confirm-loading="savingPosition"
+      :footer="null"
       :width="'min(95vw, 600px)'"
     >
-      <a-form :model="posForm" layout="vertical" class="modal-form">
+      <a-form :model="posForm" layout="vertical" class="modal-form" @submit.prevent="handleSavePosition">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Position Title">
@@ -191,6 +194,11 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <div class="modal-footer">
+          <a-button @click="posModalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingPosition" :loading="savingPosAnother" :disabled="savingPosition" @click="handleSavePositionAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingPosition" :disabled="savingPosAnother">{{ editingPosition ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
 
@@ -237,6 +245,7 @@ import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-de
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { grantApi, grantItemApi } from '@/api'
 import { ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
 import { formatCurrency, formatDate } from '@/utils/formatters'
@@ -249,7 +258,9 @@ const getSignal = useAbortController()
 // ---- Grant list state ----
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const selectedRowKeys = ref([])
@@ -260,7 +271,12 @@ const form = reactive({ organization: undefined, name: '', code: '', end_date: n
 
 // ---- Position modal state ----
 const posModalVisible = ref(false)
-const savingPosition = ref(false)
+const {
+  savingMain: savingPosition,
+  savingAnother: savingPosAnother,
+  submitMain: submitPosition,
+  submitAnother: submitPositionAnother,
+} = useSaveAnother({ refresh: fetchItems, reset: resetPosForm })
 const editingPosition = ref(null)
 const positionGrantId = ref(null)
 const posForm = reactive({
@@ -356,12 +372,16 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateGrantForm() {
+  if (!form.organization) { message.warning('Organization is required'); return false }
+  if (!form.name) { message.warning('Grant name is required'); return false }
+  if (!form.code) { message.warning('Grant code is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.organization) return message.warning('Organization is required')
-  if (!form.name) return message.warning('Grant name is required')
-  if (!form.code) return message.warning('Grant code is required')
-  saving.value = true
-  try {
+  if (!validateGrantForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await grantApi.update(editingItem.value.id, { ...form })
       message.success('Grant updated')
@@ -370,11 +390,15 @@ async function handleSave() {
       message.success('Grant created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateGrantForm()) return
+  await submitAnother(async () => {
+    await grantApi.store({ ...form })
+    message.success('Grant created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {
@@ -447,18 +471,21 @@ function openEditPosition(pos, grant) {
   posModalVisible.value = true
 }
 
+function buildPositionPayload() {
+  return {
+    grant_id: positionGrantId.value,
+    grant_position: posForm.grant_position || null,
+    budgetline_code: posForm.budgetline_code || null,
+    grant_salary: posForm.grant_salary,
+    grant_benefit: posForm.grant_benefit,
+    grant_level_of_effort: posForm.effort_percent != null ? posForm.effort_percent / 100 : null,
+    grant_position_number: posForm.grant_position_number,
+  }
+}
+
 async function handleSavePosition() {
-  savingPosition.value = true
-  try {
-    const payload = {
-      grant_id: positionGrantId.value,
-      grant_position: posForm.grant_position || null,
-      budgetline_code: posForm.budgetline_code || null,
-      grant_salary: posForm.grant_salary,
-      grant_benefit: posForm.grant_benefit,
-      grant_level_of_effort: posForm.effort_percent != null ? posForm.effort_percent / 100 : null,
-      grant_position_number: posForm.grant_position_number,
-    }
+  await submitPosition(async () => {
+    const payload = buildPositionPayload()
     if (editingPosition.value) {
       await grantItemApi.update(editingPosition.value.id, payload)
       message.success('Position updated')
@@ -467,11 +494,14 @@ async function handleSavePosition() {
       message.success('Position added')
     }
     posModalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save position')
-  }
-  savingPosition.value = false
+  })
+}
+
+async function handleSavePositionAndAddAnother() {
+  await submitPositionAnother(async () => {
+    await grantItemApi.store(buildPositionPayload())
+    message.success('Position added — ready for next entry')
+  })
 }
 
 function handleDeletePosition(pos) {

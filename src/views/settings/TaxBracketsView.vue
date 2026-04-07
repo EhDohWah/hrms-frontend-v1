@@ -88,7 +88,7 @@
       :footer="null"
       destroy-on-close
     >
-      <a-form :model="form" layout="vertical" class="modal-form" @finish="handleSave">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="Bracket Order" required>
@@ -143,7 +143,8 @@
         </a-form-item>
         <div class="modal-footer">
           <a-button @click="modalVisible = false">Cancel</a-button>
-          <a-button type="primary" html-type="submit" :loading="saving">Save</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
         </div>
       </a-form>
     </a-modal>
@@ -158,6 +159,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { taxBracketApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { formatCurrency } from '@/utils/formatters'
 
 const getSignal = useAbortController()
@@ -167,7 +169,6 @@ const authStore = useAuthStore()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
 const filters = reactive({ effective_year: undefined, is_active: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 const modalVisible = ref(false)
@@ -251,6 +252,10 @@ function resetForm() {
   })
 }
 
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
+
 function openCreate() {
   editingItem.value = null
   resetForm()
@@ -271,13 +276,17 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (form.bracket_order == null) { message.warning('Bracket order is required'); return false }
+  if (form.min_income == null) { message.warning('Minimum income is required'); return false }
+  if (form.tax_rate == null) { message.warning('Tax rate is required'); return false }
+  if (!form.effective_year) { message.warning('Effective year is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (form.bracket_order == null) return message.warning('Bracket order is required')
-  if (form.min_income == null) return message.warning('Minimum income is required')
-  if (form.tax_rate == null) return message.warning('Tax rate is required')
-  if (!form.effective_year) return message.warning('Effective year is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     const payload = { ...form }
     if (editingItem.value) {
       await taxBracketApi.update(editingItem.value.id, payload)
@@ -287,11 +296,15 @@ async function handleSave() {
       message.success('Tax bracket created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await taxBracketApi.store({ ...form })
+    message.success('Tax bracket created')
+  })
 }
 
 function handleBulkDelete() {
@@ -361,12 +374,4 @@ onMounted(() => {
 }
 .page-header-stats { display: flex; gap: 6px; }
 .modal-form { margin-top: 16px; }
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-light);
-}
 </style>

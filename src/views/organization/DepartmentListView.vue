@@ -71,10 +71,9 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Department' : 'Add Department'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Name" required>
           <a-input v-model:value="form.name" placeholder="Enter department name" />
         </a-form-item>
@@ -88,6 +87,11 @@
             un-checked-children="Inactive"
           />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -101,6 +105,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { departmentApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -109,7 +114,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ is_active: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -199,10 +206,14 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.name) { message.warning('Name is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.name) return message.warning('Name is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await departmentApi.update(editingItem.value.id, { ...form })
       message.success('Department updated')
@@ -211,17 +222,15 @@ async function handleSave() {
       message.success('Department created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    const resp = err.response?.data
-    if (resp?.errors) {
-      const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
-    } else {
-      message.error(resp?.message || 'Failed to save')
-    }
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await departmentApi.store({ ...form })
+    message.success('Department created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

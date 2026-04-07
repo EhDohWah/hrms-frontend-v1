@@ -194,6 +194,32 @@
             </a-form>
           </template>
 
+          <!-- Grant Headcount Report -->
+          <template v-else-if="selectedReport.key === 'grantHeadcount'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="grantHeadcount.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Pay Period" required>
+                    <a-date-picker
+                      v-model:value="grantHeadcount.payPeriod"
+                      picker="month"
+                      format="MMM YYYY"
+                      placeholder="Select month"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </template>
+
           <!-- Payroll Register Excel (per Grant) -->
           <template v-else-if="selectedReport.key === 'payrollRegisterExcel'">
             <a-form layout="vertical">
@@ -229,6 +255,58 @@
                   style="width: 100%"
                 />
               </a-form-item>
+            </a-form>
+          </template>
+
+          <!-- Total Grant Budget & FTE -->
+          <template v-else-if="selectedReport.key === 'totalGrantBudgetFte'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="totalGrantBudgetFte.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Pay Period" required>
+                    <a-date-picker
+                      v-model:value="totalGrantBudgetFte.payPeriod"
+                      picker="month"
+                      format="MMM YYYY"
+                      placeholder="Select month"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </template>
+
+          <!-- Budget Request Report -->
+          <template v-else-if="selectedReport.key === 'budgetRequest'">
+            <a-form layout="vertical">
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Organization" required>
+                    <a-select v-model:value="budgetRequest.organization" placeholder="Select" style="width: 100%">
+                      <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.label }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Pay Period" required>
+                    <a-date-picker
+                      v-model:value="budgetRequest.payPeriod"
+                      picker="month"
+                      format="MMM YYYY"
+                      placeholder="Select month"
+                      style="width: 100%"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
             </a-form>
           </template>
 
@@ -292,9 +370,27 @@
                 <FilePdfOutlined /> Export PDF
               </a-button>
             </template>
+            <template v-else-if="selectedReport.key === 'grantHeadcount'">
+              <a-button type="primary" :loading="grantHeadcount.loadingPdf" :disabled="!grantHeadcount.organization || !grantHeadcount.payPeriod" @click="downloadGrantHeadcountPdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
             <template v-else-if="selectedReport.key === 'payrollRegisterExcel'">
               <a-button type="primary" :loading="payrollRegisterExcel.loadingExcel" :disabled="!payrollRegisterExcel.organization || !payrollRegisterExcel.payPeriod || !payrollRegisterExcel.grantCode" @click="downloadPayrollRegisterExcel">
                 <FileExcelOutlined /> Export Excel
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'totalGrantBudgetFte'">
+              <a-button :loading="totalGrantBudgetFte.loadingExcel" :disabled="!totalGrantBudgetFte.organization || !totalGrantBudgetFte.payPeriod" @click="downloadTotalGrantBudgetFteExcel">
+                <FileExcelOutlined /> Excel
+              </a-button>
+              <a-button type="primary" :loading="totalGrantBudgetFte.loadingPdf" :disabled="!totalGrantBudgetFte.organization || !totalGrantBudgetFte.payPeriod" @click="downloadTotalGrantBudgetFtePdf">
+                <FilePdfOutlined /> Export PDF
+              </a-button>
+            </template>
+            <template v-else-if="selectedReport.key === 'budgetRequest'">
+              <a-button type="primary" :loading="budgetRequest.loadingDocx" :disabled="!budgetRequest.organization || !budgetRequest.payPeriod" @click="downloadBudgetRequestDocx">
+                <FileWordOutlined /> Export DOCX
               </a-button>
             </template>
             <template v-else-if="selectedReport.key === 'pnd91'">
@@ -318,9 +414,11 @@ import {
   CalendarOutlined,
   UserOutlined,
   DollarOutlined,
+  TeamOutlined,
   AuditOutlined,
   FilePdfOutlined,
   FileExcelOutlined,
+  FileWordOutlined,
   RightOutlined,
   CloseOutlined,
   SearchOutlined,
@@ -393,12 +491,36 @@ const REPORT_GROUPS = [
         formats: ['PDF'],
       },
       {
+        key: 'grantHeadcount',
+        title: 'Grant Headcount Report',
+        description: 'Staff FTE allocation per grant grouped by employee status',
+        fullDescription: 'Export a monthly headcount report showing FTE allocation per grant, broken down by employee status (Expats Oxford, Expats Local, Thai ID Staff, Local non Thai ID Staff) with totals.',
+        icon: markRaw(TeamOutlined),
+        formats: ['PDF'],
+      },
+      {
         key: 'payrollRegisterExcel',
         title: 'Payroll Register (per Grant)',
         description: 'Per-grant payroll register with formulas grouped by position',
         fullDescription: 'Export an Excel payroll register for a specific grant. Shows one row per funding allocation, grouped by grant position, with live Excel formulas for provident fund, social insurance, health welfare, and net pay calculations.',
         icon: markRaw(FileExcelOutlined),
         formats: ['Excel'],
+      },
+      {
+        key: 'totalGrantBudgetFte',
+        title: 'Total Grant Budget & FTE',
+        description: 'Summary of payroll costs per grant with FTE counts',
+        fullDescription: 'Export a comprehensive report showing total payroll costs grouped by grant and payment method (bank transfer vs cheque). Includes salary, deductions, employer contributions, tax, and net pay across 20 financial columns with FTE counts.',
+        icon: markRaw(DollarOutlined),
+        formats: ['PDF', 'Excel'],
+      },
+      {
+        key: 'budgetRequest',
+        title: 'Budget Request Report',
+        description: 'Accounting record for salaries & 13th month salary per grant',
+        fullDescription: 'Export a DOCX budget request report (SMRU accounting form) showing salary costs grouped by grant with accrued 13th month salary, plus a check section summarizing deductions by payment method.',
+        icon: markRaw(FileWordOutlined),
+        formats: ['DOCX'],
       },
       {
         key: 'pnd91',
@@ -475,11 +597,30 @@ const payrollRegistration = reactive({
   loadingPdf: false,
 })
 
+const grantHeadcount = reactive({
+  organization: null,
+  payPeriod: null,
+  loadingPdf: false,
+})
+
 const payrollRegisterExcel = reactive({
   organization: null,
   payPeriod: null,
   grantCode: null,
   loadingExcel: false,
+})
+
+const totalGrantBudgetFte = reactive({
+  organization: null,
+  payPeriod: null,
+  loadingPdf: false,
+  loadingExcel: false,
+})
+
+const budgetRequest = reactive({
+  organization: null,
+  payPeriod: null,
+  loadingDocx: false,
 })
 
 const pnd91 = reactive({
@@ -659,6 +800,23 @@ async function downloadPayrollRegistrationPdf() {
   }
 }
 
+async function downloadGrantHeadcountPdf() {
+  if (!grantHeadcount.organization || !grantHeadcount.payPeriod) return
+  grantHeadcount.loadingPdf = true
+  try {
+    const period = grantHeadcount.payPeriod.format('YYYY-MM')
+    const res = await reportApi.exportGrantHeadcountPdf({
+      organization: grantHeadcount.organization,
+      pay_period_date: period,
+    })
+    reportApi.downloadBlob(res, `grant_headcount_report_${grantHeadcount.organization}_${period}.pdf`)
+  } catch (err) {
+    message.error(await parseBlobError(err) || 'Failed to export grant headcount report')
+  } finally {
+    grantHeadcount.loadingPdf = false
+  }
+}
+
 async function downloadPayrollRegisterExcel() {
   if (!payrollRegisterExcel.organization || !payrollRegisterExcel.payPeriod || !payrollRegisterExcel.grantCode) return
   payrollRegisterExcel.loadingExcel = true
@@ -679,6 +837,69 @@ async function downloadPayrollRegisterExcel() {
     }
   } finally {
     payrollRegisterExcel.loadingExcel = false
+  }
+}
+
+async function downloadTotalGrantBudgetFtePdf() {
+  if (!totalGrantBudgetFte.organization || !totalGrantBudgetFte.payPeriod) return
+  totalGrantBudgetFte.loadingPdf = true
+  try {
+    const period = totalGrantBudgetFte.payPeriod.format('YYYY-MM')
+    const res = await reportApi.exportTotalGrantBudgetFtePdf({
+      organization: totalGrantBudgetFte.organization,
+      pay_period_date: period,
+    })
+    reportApi.downloadBlob(res, `total_grant_budget_fte_${totalGrantBudgetFte.organization}_${period}.pdf`)
+  } catch (err) {
+    if (err.response?.status === 404) {
+      message.error('No payroll records found for the selected period.')
+    } else {
+      message.error(await parseBlobError(err) || 'Failed to export Total Grant Budget FTE PDF')
+    }
+  } finally {
+    totalGrantBudgetFte.loadingPdf = false
+  }
+}
+
+async function downloadTotalGrantBudgetFteExcel() {
+  if (!totalGrantBudgetFte.organization || !totalGrantBudgetFte.payPeriod) return
+  totalGrantBudgetFte.loadingExcel = true
+  try {
+    const period = totalGrantBudgetFte.payPeriod.format('YYYY-MM')
+    const res = await reportApi.exportTotalGrantBudgetFteExcel({
+      organization: totalGrantBudgetFte.organization,
+      pay_period_date: period,
+    })
+    reportApi.downloadBlob(res, `total_grant_budget_fte_${totalGrantBudgetFte.organization}_${period}.xlsx`)
+  } catch (err) {
+    if (err.response?.status === 404) {
+      message.error('No payroll records found for the selected period.')
+    } else {
+      message.error(await parseBlobError(err) || 'Failed to export Total Grant Budget FTE Excel')
+    }
+  } finally {
+    totalGrantBudgetFte.loadingExcel = false
+  }
+}
+
+async function downloadBudgetRequestDocx() {
+  if (!budgetRequest.organization || !budgetRequest.payPeriod) return
+  budgetRequest.loadingDocx = true
+  try {
+    const period = budgetRequest.payPeriod.format('YYYY-MM')
+    const res = await reportApi.exportBudgetRequestDocx({
+      organization: budgetRequest.organization,
+      pay_period_date: period,
+    })
+    reportApi.downloadBlob(res, `budget_request_${budgetRequest.organization}_${period}.docx`)
+  } catch (err) {
+    if (err.response?.status === 404) {
+      message.error('No payroll records found for the selected period.')
+    } else {
+      message.error(await parseBlobError(err) || 'Failed to export budget request report')
+    }
+  } finally {
+    budgetRequest.loadingDocx = false
   }
 }
 
@@ -828,6 +1049,10 @@ onMounted(() => {
   color: var(--color-success);
 }
 .format-badge--file {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+.format-badge--docx {
   background: var(--color-info-bg);
   color: var(--color-info);
 }

@@ -73,11 +73,39 @@ export const reportApi = {
     client.post('/payrolls/register-excel', params, { responseType: 'blob' }),
 
   /**
+   * Export Grant Headcount Report as PDF.
+   * @param {{ organization: string, pay_period_date: string }} params
+   */
+  exportGrantHeadcountPdf: (params) =>
+    client.post('/reports/grant-headcount-report/export-pdf', params, { responseType: 'blob' }),
+
+  /**
    * Export PND91 government filing as text file.
    * @param {{ organization: string, year: number }} params
    */
   exportPND91: (params) =>
     client.post('/government-exports/pnd91', params, { responseType: 'blob' }),
+
+  /**
+   * Export Total Grant Budget FTE report as PDF.
+   * @param {{ organization: string, pay_period_date: string }} params
+   */
+  exportTotalGrantBudgetFtePdf: (params) =>
+    client.post('/payrolls/total-grant-budget-fte', params, { responseType: 'blob' }),
+
+  /**
+   * Export Total Grant Budget FTE report as Excel.
+   * @param {{ organization: string, pay_period_date: string }} params
+   */
+  exportTotalGrantBudgetFteExcel: (params) =>
+    client.post('/payrolls/total-grant-budget-fte-excel', params, { responseType: 'blob' }),
+
+  /**
+   * Export Budget Request report as DOCX.
+   * @param {{ organization: string, pay_period_date: string }} params
+   */
+  exportBudgetRequestDocx: (params) =>
+    client.get('/reports/budget-request/export-docx', { params, responseType: 'blob' }),
 
   downloadBlob,
 }

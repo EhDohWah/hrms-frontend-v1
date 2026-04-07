@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/authApi'
 import { userApi } from '@/api'
+import { csrfClient } from '@/api/axios'
 import { resetTourCache } from '@/composables/useTour'
 import router from '@/router'
 
@@ -12,7 +13,6 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref(null)
 
-  let refreshTimer = null
   let authChannel = null
 
   // Listen for session invalidation from the axios interceptor.
@@ -22,8 +22,6 @@ export const useAuthStore = defineStore('auth', () => {
   window.addEventListener('auth:session-expired', () => {
     user.value = null
     permissions.value = {}
-    if (refreshTimer) clearTimeout(refreshTimer)
-    refreshTimer = null
   })
 
   // ---- Computed ----
@@ -32,6 +30,14 @@ export const useAuthStore = defineStore('auth', () => {
   const userEmail = computed(() => user.value?.email || '')
   const userAvatar = computed(() => user.value?.profile_picture)
   const userRoles = computed(() => user.value?.roles?.map(r => r.name) || [])
+
+  // True when user has a default role (admin/hr-manager) and has never changed their password.
+  // Backend must include `password_changed_at` (null = still using default password).
+  const needsPasswordChange = computed(() => {
+    if (!user.value) return false
+    const isDefaultUser = userRoles.value.some(r => ['admin', 'hr-manager'].includes(r))
+    return isDefaultUser && !user.value.password_changed_at
+  })
 
   // ---- Nested object permission checks ----
   // Backend /me/permissions returns: { module_name: { read, create, update, delete, ... } }
@@ -70,22 +76,18 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
+      // Fetch CSRF cookie before login (Sanctum SPA authentication)
+      await csrfClient.get('/sanctum/csrf-cookie')
+
       const { data } = await authApi.login(email, password)
       if (data.success) {
-        // Store user metadata for UI (HttpOnly cookie handles auth)
+        // Store user metadata for UI (session cookie handles auth)
         user.value = data.user
         localStorage.setItem('user', JSON.stringify(data.user))
         localStorage.setItem('userRole', data.user.roles?.[0]?.name || '')
         localStorage.setItem('justLoggedIn', 'true')
 
-        // expires_in is seconds (e.g. 21600 = 6 hours) — store absolute timestamp
-        if (data.expires_in) {
-          const expiresAt = Date.now() + (data.expires_in * 1000)
-          localStorage.setItem('tokenExpiration', expiresAt.toString())
-        }
-
         await fetchPermissions()
-        scheduleProactiveRefresh()
         initCrossTabSync()
         return data
       }
@@ -123,7 +125,6 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       await Promise.all([fetchUser(), fetchPermissions()])
-      scheduleProactiveRefresh()
       initCrossTabSync()
     } catch {
       clearAllData()
@@ -156,33 +157,6 @@ export const useAuthStore = defineStore('auth', () => {
     if (user.value) {
       Object.assign(user.value, eventData)
       localStorage.setItem('user', JSON.stringify(user.value))
-    }
-  }
-
-  // ---- Proactive token refresh ----
-  function scheduleProactiveRefresh() {
-    if (refreshTimer) clearTimeout(refreshTimer)
-
-    const expiresAt = parseInt(localStorage.getItem('tokenExpiration'), 10)
-    if (!expiresAt || isNaN(expiresAt)) return
-
-    const now = Date.now()
-    const refreshIn = expiresAt - now - (5 * 60 * 1000) // 5 minutes before expiry
-
-    if (refreshIn > 0) {
-      refreshTimer = setTimeout(async () => {
-        try {
-          const { data } = await authApi.refreshToken()
-          // expires_in is seconds — store new absolute timestamp
-          if (data.expires_in) {
-            const newExpiresAt = Date.now() + (data.expires_in * 1000)
-            localStorage.setItem('tokenExpiration', newExpiresAt.toString())
-          }
-          scheduleProactiveRefresh()
-        } catch {
-          await logout()
-        }
-      }, refreshIn)
     }
   }
 
@@ -240,15 +214,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user')
     localStorage.removeItem('userRole')
     localStorage.removeItem('permissions')
-    localStorage.removeItem('tokenExpiration')
     localStorage.removeItem('justLoggedIn')
   }
 
   function clearAllData() {
     user.value = null
     permissions.value = {}
-    if (refreshTimer) clearTimeout(refreshTimer)
-    refreshTimer = null
     resetTourCache()
     clearLocalStorage()
   }
@@ -257,7 +228,7 @@ export const useAuthStore = defineStore('auth', () => {
     // State
     user, permissions, loading, error,
     // Computed
-    isAuthenticated, userName, userEmail, userAvatar, userRoles,
+    isAuthenticated, userName, userEmail, userAvatar, userRoles, needsPasswordChange,
     // Permission checks
     hasPermission, canRead, canCreate, canUpdate, canDelete, canEdit, hasRole,
     // Actions

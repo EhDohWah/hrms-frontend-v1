@@ -41,6 +41,18 @@
       </div>
     </div>
 
+    <!-- DOB info (auto-derived from date_of_birth) -->
+    <div v-if="form.date_of_birth" class="sidebar-timestamps">
+      <div class="timestamp-item">
+        <span class="meta-label">DOB Thai (B.E.)</span>
+        <span class="meta-value font-mono">{{ thaiYear }}</span>
+      </div>
+      <div class="timestamp-item">
+        <span class="meta-label">Age</span>
+        <span class="meta-value">{{ age }} years</span>
+      </div>
+    </div>
+
     <!-- Timestamps (only for existing employees) -->
     <div v-if="employee" class="sidebar-timestamps">
       <div v-if="employee.created_at" class="timestamp-item">
@@ -59,6 +71,7 @@
 import { computed, inject } from 'vue'
 import { CameraOutlined } from '@ant-design/icons-vue'
 import { getOrgColor } from '@/constants/organizations'
+import { calcAge, formatThaiYear } from '@/utils/formatters'
 
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
 const dayjs = inject('$dayjs')
@@ -72,9 +85,10 @@ const props = defineProps({
 defineEmits(['upload'])
 
 const statusColorMap = {
+  'Expats (Oxford)': 'blue',
+  'Expats (Local)': 'purple',
   'Local ID Staff': 'green',
   'Local non ID Staff': 'green',
-  'Expats (Local)': 'purple',
 }
 
 const displayNameEn = computed(() => {
@@ -92,6 +106,9 @@ const initials = computed(() => {
   const l = (props.form.last_name_en || '')[0] || ''
   return `${f}${l}`.toUpperCase()
 })
+
+const thaiYear = computed(() => formatThaiYear(props.form.date_of_birth))
+const age = computed(() => calcAge(props.form.date_of_birth))
 
 const profilePictureUrl = computed(() => {
   const pic = props.employee?.profile_picture

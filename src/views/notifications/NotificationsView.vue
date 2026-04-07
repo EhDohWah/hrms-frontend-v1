@@ -40,6 +40,13 @@
         </div>
         <div class="notif-body">
           <p class="notif-message">{{ notif.message || notif.data?.message || 'Notification' }}</p>
+          <div v-if="getErrorDetails(notif)" class="notif-error-details">
+            <p
+              v-for="(line, i) in getErrorLines(notif)"
+              :key="i"
+              class="notif-error-line"
+            >{{ line }}</p>
+          </div>
           <div class="notif-meta">
             <a-tag v-if="notif.category_label" size="small">{{ notif.category_label }}</a-tag>
             <span class="notif-time">{{ dayjs(notif.created_at).fromNow() }}</span>
@@ -81,6 +88,16 @@ const filteredNotifications = computed(() => {
 function getCategoryBg(color) {
   if (!color) return '#f3f4f6'
   return color + '18'
+}
+
+function getErrorDetails(notif) {
+  return notif.error_details || notif.data?.error_details || null
+}
+
+function getErrorLines(notif) {
+  const details = getErrorDetails(notif)
+  if (!details) return []
+  return String(details).split('\n').filter(Boolean)
 }
 
 async function handleClick(notif) {
@@ -182,6 +199,20 @@ onMounted(() => {
   margin: 0 0 6px;
   line-height: 1.4;
   color: var(--color-text);
+}
+.notif-error-details {
+  margin: 6px 0 8px;
+  padding: 8px 12px;
+  background: var(--color-bg-hover, #f9fafb);
+  border-radius: var(--radius-sm, 4px);
+  border-left: 3px solid var(--color-warning, #faad14);
+}
+.notif-error-line {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--color-text-secondary, #6b7280);
+  word-break: break-word;
 }
 .notif-meta {
   display: flex;

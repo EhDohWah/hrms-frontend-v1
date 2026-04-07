@@ -7,7 +7,6 @@ export const resignationApi = {
   update: (id, payload) => client.put(`/resignations/${id}`, payload),
   destroy: (id) => client.delete(`/resignations/${id}`),
   destroyBatch: (ids) => client.delete('/resignations/batch', { data: { ids } }),
-  acknowledge: (id, payload) => client.put(`/resignations/${id}/acknowledge`, payload),
   searchEmployees: (params) => client.get('/resignations/search-employees', { params }),
   recommendationLetter: (id) => client.get(`/resignations/${id}/recommendation-letter`, { responseType: 'blob' }),
 }

@@ -97,11 +97,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Interview' : 'Schedule Interview'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 600px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Candidate Name" required>
@@ -185,6 +184,11 @@
         <a-form-item label="Reference Info">
           <a-textarea v-model:value="form.reference_info" placeholder="Enter reference information" :rows="2" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
 
@@ -229,6 +233,7 @@ import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-de
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { interviewApi, lookupApi, optionsApi } from '@/api'
 import { formatDate } from '@/utils/formatters'
 import RecordView from '@/components/common/RecordView.vue'
@@ -243,7 +248,9 @@ const currentYear = new Date().getFullYear()
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ status: undefined, year: currentYear })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -365,11 +372,15 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.candidate_name) { message.warning('Candidate name is required'); return false }
+  if (!form.interview_date) { message.warning('Interview date is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.candidate_name) return message.warning('Candidate name is required')
-  if (!form.interview_date) return message.warning('Interview date is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await interviewApi.update(editingItem.value.id, { ...form })
       message.success('Interview updated')
@@ -378,11 +389,15 @@ async function handleSave() {
       message.success('Interview scheduled')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await interviewApi.store({ ...form })
+    message.success('Interview scheduled — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

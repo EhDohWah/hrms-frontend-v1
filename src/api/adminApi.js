@@ -23,4 +23,15 @@ export const adminApi = {
 
   // Modules
   getModulesByCategory: () => client.get('/admin/modules/by-category'),
+
+  // Bulk Actions
+  bulkStatus: (payload) => client.post('/admin/users/bulk-status', payload),
+  bulkRole: (payload) => client.post('/admin/users/bulk-role', payload),
+
+  // Reports
+  userActivityReport: (params, config) => client.get('/admin/reports/user-activity', { params, ...config }),
+
+  // Login History
+  loginHistory: (params, config) => client.get('/admin/login-history', { params, ...config }),
+  loginHistorySummary: (config) => client.get('/admin/login-history/summary', config),
 }

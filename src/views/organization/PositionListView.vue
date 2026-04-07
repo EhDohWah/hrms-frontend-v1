@@ -102,11 +102,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Position' : 'Add Position'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 560px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Title" required>
           <a-input v-model:value="form.title" placeholder="Enter position title" />
         </a-form-item>
@@ -165,6 +164,11 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -178,6 +182,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { positionApi, departmentApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -189,7 +194,9 @@ const departmentOptions = ref([])
 const supervisorOptions = ref([])
 const loadingSupervisors = ref(false)
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ department_id: undefined, is_active: undefined, is_manager: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -329,11 +336,15 @@ function onFormDepartmentChange() {
   fetchSupervisorOptions(form.department_id)
 }
 
+function validateForm() {
+  if (!form.title) { message.warning('Position title is required'); return false }
+  if (!form.department_id) { message.warning('Department is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.title) return message.warning('Position title is required')
-  if (!form.department_id) return message.warning('Department is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await positionApi.update(editingItem.value.id, { ...form })
       message.success('Position updated')
@@ -342,17 +353,15 @@ async function handleSave() {
       message.success('Position created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    const resp = err.response?.data
-    if (resp?.errors) {
-      const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
-    } else {
-      message.error(resp?.message || 'Failed to save')
-    }
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await positionApi.store({ ...form })
+    message.success('Position created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

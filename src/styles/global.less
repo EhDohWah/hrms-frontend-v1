@@ -301,9 +301,13 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+  text-decoration: none;
+  color: var(--color-text);
+  cursor: pointer;
 }
 .stat-card:hover {
   box-shadow: var(--shadow-md);
+  color: var(--color-text);
 }
 .stat-icon {
   width: 44px;
@@ -371,6 +375,16 @@ body {
   gap: 8px;
 }
 
+/* Modal footer — shared across all create/edit modals */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+}
+
 /* Filter inputs — full-width on mobile, auto on sm+ */
 .filter-input {
   width: 100%;
@@ -408,12 +422,97 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 @media (min-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+}
+.stats-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.stats-timestamp {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.stats-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  font-size: 13px;
+  padding: 0;
+}
+.stats-refresh:hover {
+  color: var(--color-accent);
+  background: var(--color-bg-subtle);
+}
+.stats-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ---- Page header & filter bar (shared across list views) ---- */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (min-width: 640px) {
+  .page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.page-header-stats { display: flex; gap: 6px; align-items: center; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+.modal-form { margin-top: 16px; }
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+.bulk-count {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-right: 4px;
+}
+
+/* ---- Widget shared styles ---- */
+.widget-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+.cell-truncate {
+  display: block;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 /* Hidden/shown at breakpoints */
@@ -443,3 +542,70 @@ body {
 .fade-leave-to {
   opacity: 0;
 }
+
+/* ── Record View Modal (shared by all RecordView consumers) ── */
+.record-view-modal .ant-modal-wrap { overflow: auto; }
+.record-view-modal .ant-modal { padding: 24px 0; }
+.record-view-modal .ant-modal-content { padding: 0 !important; background: transparent !important; box-shadow: none !important; border-radius: 10px !important; overflow: visible !important; }
+.record-view-modal .ant-modal-body { padding: 0 !important; background: transparent !important; }
+.record-view-modal .ant-modal-header { display: none !important; }
+.record-view-modal .ant-modal-close { display: none !important; }
+
+/* ── Password Requirements Checklist (shared) ── */
+.pw-requirements {
+  padding: 12px;
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  margin-bottom: 16px;
+}
+.pw-req-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1;
+  padding: 3px 0;
+  transition: color var(--transition-fast);
+}
+.pw-req-item.pw-req-met { color: var(--color-success); }
+.pw-req-icon { font-size: 13px; flex-shrink: 0; }
+.pw-req-icon--met { color: var(--color-success); }
+.pw-req-icon--unmet { color: var(--color-border); }
+
+.pw-strength-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-light);
+}
+.pw-strength-track {
+  flex: 1;
+  height: 4px;
+  background: var(--color-bg-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.pw-strength-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--transition-base), background var(--transition-base);
+}
+.pw-strength--weak .pw-strength-fill,
+.pw-strength-label.pw-strength--weak { color: var(--color-danger); background: var(--color-danger); }
+.pw-strength--fair .pw-strength-fill,
+.pw-strength-label.pw-strength--fair { color: var(--color-warning); background: var(--color-warning); }
+.pw-strength--strong .pw-strength-fill,
+.pw-strength-label.pw-strength--strong { color: var(--color-success); background: var(--color-success); }
+.pw-strength-bar .pw-strength-label { font-size: 11px; font-weight: 600; min-width: 40px; text-align: right; background: none; }
+
+/* ── Password Warning / Success Modal (portal renders outside component scope) ── */
+.password-warning-modal .ant-modal-content { border: 2px solid var(--color-danger); border-radius: var(--radius-lg); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.08), var(--shadow-lg); overflow: hidden; }
+.password-warning-modal .ant-modal-body { padding: 28px 28px 24px; }
+.password-warning-modal .ant-modal-mask { background: rgba(0, 0, 0, 0.65); }
+.password-success-modal .ant-modal-content { border: 2px solid var(--color-success); border-radius: var(--radius-lg); box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.08), var(--shadow-lg); }
+.password-success-modal .ant-modal-body { padding: 28px; }
+.password-success-modal .ant-modal-mask { background: rgba(0, 0, 0, 0.65); }

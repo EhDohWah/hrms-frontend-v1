@@ -11,7 +11,8 @@
       <!-- Frappe-style breadcrumb -->
       <nav class="header-breadcrumb">
         <template v-for="(crumb, i) in appStore.breadcrumbs" :key="i">
-          <router-link :to="crumb.to" class="breadcrumb-link">{{ crumb.label }}</router-link>
+          <router-link v-if="crumb.to" :to="crumb.to" class="breadcrumb-link">{{ crumb.label || crumb.title }}</router-link>
+          <span v-else class="breadcrumb-link">{{ crumb.label || crumb.title }}</span>
         </template>
         <span class="breadcrumb-current">{{ appStore.pageTitle || 'Dashboard' }}</span>
       </nav>

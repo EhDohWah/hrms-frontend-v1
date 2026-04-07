@@ -69,6 +69,7 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
+              <a-button size="small" type="link" @click.stop="openView(record)">View</a-button>
               <a-button v-if="authStore.canUpdate('trainings')" size="small" type="link" @click.stop="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('trainings')" size="small" type="link" danger @click.stop="handleDelete(record)">Delete</a-button>
             </a-space>
@@ -81,11 +82,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Training' : 'Add Training'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 560px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Training Type">
@@ -115,7 +115,44 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
+    </a-modal>
+
+    <!-- Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewRecord" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :title="viewRecord.title"
+          icon="school"
+          badge="Training Record"
+          :status="viewStatus.key"
+          :status-label="viewStatus.label"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
     </a-modal>
   </div>
 </template>
@@ -128,9 +165,11 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { trainingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { formatDate } from '@/utils/formatters'
+import { useSaveAnother } from '@/composables/useSaveAnother'
+import { formatDate, formatDateTime } from '@/utils/formatters'
 import { cleanParams } from '@/utils/helpers'
 import { PAGINATION_DEFAULTS } from '@/constants/config'
+import RecordView from '@/components/common/RecordView.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -141,7 +180,9 @@ const currentYear = new Date().getFullYear()
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ year: currentYear, training_type_id: undefined })
 const pagination = reactive({ current_page: 1, per_page: PAGINATION_DEFAULTS.perPage, total: 0 })
@@ -157,7 +198,7 @@ const columns = [
   { title: 'Type', key: 'training_type', width: 160 },
   { title: 'Organizer', dataIndex: 'organizer', width: 200 },
   { title: 'Period', key: 'dates', width: 260 },
-  { title: '', key: 'actions', width: 140, align: 'right' },
+  { title: '', key: 'actions', width: 180, align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -224,13 +265,17 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.title) { message.warning('Title is required'); return false }
+  if (!form.organizer) { message.warning('Organizer is required'); return false }
+  if (!form.start_date) { message.warning('Start date is required'); return false }
+  if (!form.end_date) { message.warning('End date is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.title) return message.warning('Title is required')
-  if (!form.organizer) return message.warning('Organizer is required')
-  if (!form.start_date) return message.warning('Start date is required')
-  if (!form.end_date) return message.warning('End date is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     const payload = cleanParams({ ...form })
     if (editingItem.value) {
       await trainingApi.update(editingItem.value.id, payload)
@@ -240,12 +285,15 @@ async function handleSave() {
       message.success('Training created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  } finally {
-    saving.value = false
-  }
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await trainingApi.store(cleanParams({ ...form }))
+    message.success('Training created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {
@@ -295,6 +343,106 @@ async function fetchTypeOptions() {
   } catch { /* silent */ }
 }
 
+// ── Record View Modal ────────────────────────────────────────────────────────
+
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewRecord = ref(null)
+
+const viewStatus = computed(() => {
+  const r = viewRecord.value
+  if (!r) return { key: 'active', label: '' }
+  const today = new Date().toISOString().slice(0, 10)
+  if (r.end_date && r.end_date < today) return { key: 'expired', label: 'Completed' }
+  if (r.start_date && r.start_date <= today) return { key: 'active', label: 'In Progress' }
+  return { key: 'ending-soon', label: 'Upcoming' }
+})
+
+const viewStatusMeta = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const meta = []
+  if (r.start_date && r.end_date) {
+    meta.push({ icon: 'calendar', text: `${formatDate(r.start_date)} → ${formatDate(r.end_date)}` })
+  }
+  if (r.organizer) meta.push({ icon: 'building', text: r.organizer })
+  if (r.training_type) meta.push({ icon: 'tag', text: r.training_type.name })
+  const enrollCount = r.employee_trainings?.length || 0
+  if (enrollCount > 0) meta.push({ icon: 'users', text: `${enrollCount} enrolled` })
+  return meta
+})
+
+const viewSections = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const sections = []
+
+  sections.push({
+    title: 'Training Details', icon: 'school', type: 'fields',
+    fields: [
+      { label: 'Title', value: r.title },
+      { label: 'Organizer', value: r.organizer },
+      { label: 'Type', value: r.training_type?.name },
+      { label: 'Start Date', value: formatDate(r.start_date), mono: true },
+      { label: 'End Date', value: formatDate(r.end_date), mono: true },
+    ],
+  })
+
+  if (r.employee_trainings?.length) {
+    sections.push({
+      title: 'Attendance', icon: 'clipboard-check', type: 'table',
+      headers: ['Employee', 'Staff ID', 'Status', 'Enrolled On'],
+      rows: r.employee_trainings.map(et => [
+        `${et.employee?.first_name_en || ''} ${et.employee?.last_name_en || ''}`.trim() || '—',
+        et.employee?.staff_id || '—',
+        et.status || '—',
+        formatDate(et.created_at),
+      ]),
+      monoCols: [1, 3],
+    })
+  }
+
+  sections.push({
+    title: 'Record Information', icon: 'info-circle', type: 'fields',
+    fields: [
+      { label: 'Created By', value: r.created_by },
+      { label: 'Updated By', value: r.updated_by },
+      { label: 'Created At', value: formatDateTime(r.created_at), mono: true },
+      { label: 'Updated At', value: formatDateTime(r.updated_at), mono: true },
+    ],
+  })
+
+  return sections
+})
+
+async function openView(record) {
+  viewRecord.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await trainingApi.show(record.id)
+    viewRecord.value = data.data || data
+  } catch {
+    message.error('Failed to load training details')
+    viewModalVisible.value = false
+  } finally {
+    viewLoading.value = false
+  }
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const id = viewRecord.value?.id
+  viewModalVisible.value = false
+  if (id) {
+    const record = items.value.find(i => i.id === id)
+    if (record) openEdit(record)
+  }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Training')
   fetchTypeOptions()
@@ -321,4 +469,18 @@ onMounted(() => {
 .cell-link { text-decoration: none; color: inherit; }
 .cell-name { font-weight: 600; font-size: 14px; }
 .modal-form { margin-top: 16px; }
+
+/* ── Record View Modal ── */
+.view-loading-state { display: flex; justify-content: center; align-items: center; padding: 64px 0; }
+.view-modal-wrap { position: relative; max-width: 880px; margin: 0 auto; }
+.view-close-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 34px; height: 34px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.18); backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-base);
+}
+.view-close-btn:hover { background: rgba(255,255,255,0.35); color: #fff; transform: scale(1.08); }
+.view-close-btn:focus-visible { outline: 2px solid rgba(255,255,255,0.6); outline-offset: 2px; }
 </style>

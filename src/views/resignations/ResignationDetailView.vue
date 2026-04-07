@@ -8,30 +8,16 @@
             <ArrowLeftOutlined /> Back to Resignations
           </a-button>
           <h2 class="detail-title" v-if="item">
-            {{ item.employee?.first_name_en }} {{ item.employee?.last_name_en }}
+            <router-link :to="{ name: 'employee-detail', params: { id: item.employee_id } }" class="employee-link">
+              {{ item.employee?.first_name_en }} {{ item.employee?.last_name_en }}
+            </router-link>
             <span class="detail-sub font-mono">{{ item.employee?.staff_id }}</span>
             <a-tag v-if="item.employee?.organization" :color="getOrgColor(item.employee.organization)" size="small" style="margin-left: 8px; vertical-align: middle;">{{ item.employee.organization }}</a-tag>
           </h2>
         </div>
         <a-space v-if="item">
           <a-button
-            v-if="authStore.canUpdate('resignations') && item.status === 'pending'"
-            type="primary"
-            :loading="acknowledging"
-            @click="handleAcknowledge"
-          >
-            <CheckOutlined /> Acknowledge
-          </a-button>
-          <a-button
-            v-if="authStore.canUpdate('resignations') && item.status === 'pending'"
-            danger
-            :loading="rejecting"
-            @click="handleReject"
-          >
-            <CloseOutlined /> Reject
-          </a-button>
-          <a-button
-            v-if="authStore.canRead('resignations') && item.status === 'acknowledged'"
+            v-if="authStore.canRead('resignations')"
             @click="handleDownloadLetter"
             :loading="downloading"
           >
@@ -46,7 +32,7 @@
           <a-col :xs="12" :sm="6">
             <a-card size="small">
               <div class="stat-label">Status</div>
-              <a-tag :color="getResignationStatusColor(item.status)">{{ item.status }}</a-tag>
+              <a-tag :color="approvalStatus.color">{{ approvalStatus.label }}</a-tag>
             </a-card>
           </a-col>
           <a-col :xs="12" :sm="6">
@@ -67,19 +53,10 @@
           </a-col>
         </a-row>
 
-        <!-- Details -->
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-card size="small" title="Reason">
-              <p>{{ item.reason || 'No reason provided' }}</p>
-            </a-card>
-          </a-col>
-          <a-col :span="12">
-            <a-card size="small" title="Details">
-              <p>{{ item.reason_details || 'No additional details' }}</p>
-            </a-card>
-          </a-col>
-        </a-row>
+        <!-- Notes -->
+        <a-card size="small" title="Notes">
+          <p>{{ item.notes || '—' }}</p>
+        </a-card>
 
         <!-- Computed info -->
         <a-row :gutter="16" style="margin-top: 16px;">
@@ -101,15 +78,17 @@
           </a-col>
         </a-row>
 
-        <a-card size="small" title="Timeline" style="margin-top: 16px;" v-if="item.created_at || item.acknowledged_at">
+        <a-card size="small" title="Timeline" style="margin-top: 16px;" v-if="item.created_at || item.supervisor_approved_at || item.hr_manager_approved_at">
           <a-timeline>
             <a-timeline-item v-if="item.created_at" color="blue">
-              Submitted on {{ formatDate(item.created_at) }}
+              Resignation recorded on {{ formatDate(item.created_at) }}
               <span v-if="item.created_by" class="timeline-by"> by {{ item.created_by }}</span>
             </a-timeline-item>
-            <a-timeline-item v-if="item.acknowledged_at" :color="item.status === 'rejected' ? 'red' : 'orange'">
-              {{ item.status === 'rejected' ? 'Rejected' : 'Acknowledged' }} on {{ formatDate(item.acknowledged_at) }}
-              <span v-if="item.acknowledged_by_user" class="timeline-by"> by {{ item.acknowledged_by_user.name }}</span>
+            <a-timeline-item v-if="item.supervisor_approved_at" :color="item.supervisor_approved ? 'green' : 'red'">
+              Supervisor {{ item.supervisor_approved ? 'acknowledged' : 'declined' }} on {{ formatDate(item.supervisor_approved_at) }}
+            </a-timeline-item>
+            <a-timeline-item v-if="item.hr_manager_approved_at" :color="item.hr_manager_approved ? 'green' : 'red'">
+              HR {{ item.hr_manager_approved ? 'acknowledged' : 'declined' }} on {{ formatDate(item.hr_manager_approved_at) }}
             </a-timeline-item>
           </a-timeline>
         </a-card>
@@ -119,16 +98,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, createVNode } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Modal, message } from 'ant-design-vue'
-import { ArrowLeftOutlined, CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { resignationApi } from '@/api'
 import { formatDate } from '@/utils/formatters'
 import { getOrgColor } from '@/constants/organizations'
-import { getResignationStatusColor } from '@/constants/resignations'
+import { getResignationApprovalStatus } from '@/constants/resignations'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,9 +116,9 @@ const authStore = useAuthStore()
 
 const item = ref(null)
 const loading = ref(false)
-const acknowledging = ref(false)
-const rejecting = ref(false)
 const downloading = ref(false)
+
+const approvalStatus = computed(() => getResignationApprovalStatus(item.value))
 
 async function fetchItem() {
   loading.value = true
@@ -151,49 +130,9 @@ async function fetchItem() {
   } catch {
     message.error('Failed to load resignation')
     router.push({ name: 'resignations' })
+  } finally {
+    loading.value = false
   }
-  loading.value = false
-}
-
-function handleAcknowledge() {
-  Modal.confirm({
-    title: 'Acknowledge Resignation',
-    icon: createVNode(ExclamationCircleOutlined),
-    content: 'This will set the employment end date to the last working date and close active funding allocations. Continue?',
-    okText: 'Acknowledge',
-    async onOk() {
-      acknowledging.value = true
-      try {
-        await resignationApi.acknowledge(route.params.id, { action: 'acknowledge' })
-        message.success('Resignation acknowledged successfully')
-        fetchItem()
-      } catch (err) {
-        message.error(err.response?.data?.message || 'Failed to acknowledge')
-      }
-      acknowledging.value = false
-    },
-  })
-}
-
-function handleReject() {
-  Modal.confirm({
-    title: 'Reject Resignation',
-    icon: createVNode(ExclamationCircleOutlined),
-    content: 'Are you sure you want to reject this resignation?',
-    okText: 'Reject',
-    okType: 'danger',
-    async onOk() {
-      rejecting.value = true
-      try {
-        await resignationApi.acknowledge(route.params.id, { action: 'reject' })
-        message.success('Resignation rejected')
-        fetchItem()
-      } catch (err) {
-        message.error(err.response?.data?.message || 'Failed to reject')
-      }
-      rejecting.value = false
-    },
-  })
 }
 
 async function handleDownloadLetter() {
@@ -210,8 +149,9 @@ async function handleDownloadLetter() {
     window.URL.revokeObjectURL(url)
   } catch (err) {
     message.error(err.response?.data?.message || 'Failed to download')
+  } finally {
+    downloading.value = false
   }
-  downloading.value = false
 }
 
 onMounted(() => {
@@ -252,5 +192,12 @@ onMounted(() => {
 .timeline-by {
   color: var(--color-text-muted);
   font-style: italic;
+}
+.employee-link {
+  color: inherit;
+  text-decoration: none;
+}
+.employee-link:hover {
+  color: var(--color-accent);
 }
 </style>

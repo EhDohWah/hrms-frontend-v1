@@ -113,10 +113,9 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Tax Setting' : 'Add Tax Setting'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Setting Key" required>
@@ -158,6 +157,11 @@
         <a-form-item label="Enabled">
           <a-switch v-model:checked="form.is_selected" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -171,6 +175,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { taxSettingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { formatCurrency } from '@/utils/formatters'
 
 const getSignal = useAbortController()
@@ -180,7 +185,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const togglingId = ref(null)
 const search = ref('')
 const filters = reactive({ effective_year: undefined, setting_type: undefined, is_selected: undefined })
@@ -290,13 +297,17 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.setting_key) { message.warning('Setting key is required'); return false }
+  if (form.setting_value == null) { message.warning('Value is required'); return false }
+  if (!form.setting_type) { message.warning('Setting type is required'); return false }
+  if (!form.effective_year) { message.warning('Effective year is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.setting_key) return message.warning('Setting key is required')
-  if (form.setting_value == null) return message.warning('Value is required')
-  if (!form.setting_type) return message.warning('Setting type is required')
-  if (!form.effective_year) return message.warning('Effective year is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     const payload = { ...form }
     if (editingItem.value) {
       await taxSettingApi.update(editingItem.value.id, payload)
@@ -306,11 +317,15 @@ async function handleSave() {
       message.success('Setting created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await taxSettingApi.store({ ...form })
+    message.success('Setting created — ready for next entry')
+  })
 }
 
 async function handleToggle(record) {

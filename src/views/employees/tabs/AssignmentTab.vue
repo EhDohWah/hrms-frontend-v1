@@ -48,15 +48,16 @@
         <div class="info-grid">
           <InfoField label="Status">
             <template #value>
-              <a-tag :color="getResignationStatusColor(resignation.acknowledgement_status)" size="small">
-                {{ resignation.acknowledgement_status || '—' }}
+              <a-tag :color="getResignationApprovalStatus(resignation).color" size="small">
+                {{ getResignationApprovalStatus(resignation).label }}
               </a-tag>
             </template>
           </InfoField>
           <InfoField label="Resignation Date" :value="formatDate(resignation.resignation_date)" />
           <InfoField label="Last Working Date" :value="formatDate(resignation.last_working_date)" />
-          <InfoField label="Reason" :value="resignation.reason" />
-          <InfoField label="Acknowledged By" :value="resignation.acknowledged_by?.name" />
+          <InfoField label="Notes" :value="resignation.notes" />
+          <InfoField label="Supervisor Approved" :value="formatDate(resignation.supervisor_approved_at)" />
+          <InfoField label="HR Manager Approved" :value="formatDate(resignation.hr_manager_approved_at)" />
         </div>
         <div class="resignation-link">
           <router-link :to="{ name: 'resignation-detail', params: { id: resignation.id } }" class="view-detail-link">
@@ -555,7 +556,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons-vu
 import InfoField from '@/components/common/InfoField.vue'
 import { getOrgColor } from '@/constants/organizations'
 import { formatCurrency, formatDate } from '@/utils/formatters'
-import { getResignationStatusColor } from '@/constants/resignations'
+import { getResignationApprovalStatus } from '@/constants/resignations'
 
 const dayjs = inject('$dayjs')
 const authStore = useAuthStore()

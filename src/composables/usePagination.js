@@ -1,42 +1,77 @@
-import { ref, computed } from 'vue'
+import { reactive, computed } from 'vue'
 import { PAGINATION_DEFAULTS } from '@/constants/config'
 
+/**
+ * Composable for Ant Design table pagination.
+ *
+ * Usage:
+ *   const { pagination, tablePagination, handleTableChange, refresh } = usePagination(fetchFn)
+ *
+ * fetchFn receives { page, per_page } and should return the API response.
+ * The composable extracts pagination meta from the response automatically.
+ */
 export function usePagination(fetchFunction) {
-  const currentPage = ref(1)
-  const perPage = ref(PAGINATION_DEFAULTS.perPage)
-  const total = ref(0)
-  const lastPage = ref(1)
+  const pagination = reactive({
+    current_page: 1,
+    per_page: PAGINATION_DEFAULTS.perPage,
+    total: 0,
+    last_page: 1,
+  })
 
-  const paginationConfig = computed(() => ({
-    current: currentPage.value,
-    pageSize: perPage.value,
-    total: total.value,
+  const tablePagination = computed(() => ({
+    current: pagination.current_page,
+    pageSize: pagination.per_page,
+    total: pagination.total,
     showSizeChanger: true,
-    showTotal: (t, range) => `${range[0]}-${range[1]} of ${t} items`,
+    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
     pageSizeOptions: PAGINATION_DEFAULTS.pageSizeOptions,
   }))
 
-  function updateFromResponse(paginationData) {
-    if (!paginationData) return
-    currentPage.value = paginationData.current_page
-    perPage.value = paginationData.per_page
-    total.value = paginationData.total
-    lastPage.value = paginationData.last_page
+  function updateFromResponse(data) {
+    if (!data) return
+    // Support multiple Laravel response shapes:
+    // 1. { current_page, per_page, total } — direct pagination object
+    // 2. { meta: { current_page, ... } } — resource collection
+    // 3. { data: { current_page, ... } } — wrapped pagination (BaseApiController)
+    const meta = data.meta || data.data || data
+    if (meta.current_page != null) pagination.current_page = meta.current_page
+    if (meta.per_page != null) pagination.per_page = meta.per_page
+    if (meta.total != null) pagination.total = meta.total
+    if (meta.last_page != null) pagination.last_page = meta.last_page
   }
 
-  async function handleTableChange(pag) {
-    currentPage.value = pag.current
-    perPage.value = pag.pageSize
-    if (fetchFunction) await fetchFunction()
+  async function doFetch() {
+    if (!fetchFunction) return
+    const result = await fetchFunction({
+      page: pagination.current_page,
+      per_page: pagination.per_page,
+    })
+    if (result) updateFromResponse(result)
   }
 
-  function resetPagination() {
-    currentPage.value = 1
+  function handleTableChange(pag) {
+    pagination.current_page = pag.current
+    pagination.per_page = pag.pageSize
+    doFetch()
+  }
+
+  function refresh() {
+    pagination.current_page = 1
+    doFetch()
   }
 
   return {
-    currentPage, perPage, total, lastPage,
-    paginationConfig,
-    updateFromResponse, handleTableChange, resetPagination,
+    pagination,
+    tablePagination,
+    handleTableChange,
+    refresh,
+    // Legacy exports for backward compat
+    currentPage: computed(() => pagination.current_page),
+    perPage: computed(() => pagination.per_page),
+    total: computed(() => pagination.total),
+    lastPage: computed(() => pagination.last_page),
+    paginationConfig: tablePagination,
+    updateFromResponse,
+    resetPagination: refresh,
   }
 }

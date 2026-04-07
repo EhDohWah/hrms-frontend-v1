@@ -84,11 +84,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Job Offer' : 'Create Job Offer'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 600px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Candidate Name" required>
@@ -133,6 +132,11 @@
         <a-form-item label="Note" required>
           <a-textarea v-model:value="form.note" placeholder="Enter notes" :rows="3" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
 
@@ -194,6 +198,7 @@ import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined, FilePdfOutline
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { jobOfferApi, reportApi, lookupApi } from '@/api'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 
@@ -205,7 +210,9 @@ const acceptanceStatusOptions = ref([])
 
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -321,18 +328,21 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
-async function handleSave() {
-  if (!form.candidate_name) return message.warning('Candidate name is required')
-  if (!form.position_name) return message.warning('Position name is required')
-  if (!form.date) return message.warning('Offer date is required')
-  if (!form.acceptance_deadline) return message.warning('Acceptance deadline is required')
-  if (!form.acceptance_status) return message.warning('Acceptance status is required')
-  if (form.probation_salary == null) return message.warning('Probation salary is required')
-  if (form.pass_probation_salary == null) return message.warning('Post-probation salary is required')
-  if (!form.note) return message.warning('Note is required')
+function validateForm() {
+  if (!form.candidate_name) { message.warning('Candidate name is required'); return false }
+  if (!form.position_name) { message.warning('Position name is required'); return false }
+  if (!form.date) { message.warning('Offer date is required'); return false }
+  if (!form.acceptance_deadline) { message.warning('Acceptance deadline is required'); return false }
+  if (!form.acceptance_status) { message.warning('Acceptance status is required'); return false }
+  if (form.probation_salary == null) { message.warning('Probation salary is required'); return false }
+  if (form.pass_probation_salary == null) { message.warning('Post-probation salary is required'); return false }
+  if (!form.note) { message.warning('Note is required'); return false }
+  return true
+}
 
-  saving.value = true
-  try {
+async function handleSave() {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await jobOfferApi.update(editingItem.value.id, { ...form })
       message.success('Job offer updated')
@@ -341,11 +351,15 @@ async function handleSave() {
       message.success('Job offer created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await jobOfferApi.store({ ...form })
+    message.success('Job offer created — ready for next entry')
+  })
 }
 
 async function openPdfPreview(record) {

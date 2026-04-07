@@ -78,11 +78,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Site' : 'Add Site'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 560px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="16">
             <a-form-item label="Name" required>
@@ -125,6 +124,11 @@
             un-checked-children="Inactive"
           />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -138,6 +142,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { siteApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -146,7 +151,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ is_active: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -250,11 +257,15 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.name) { message.warning('Site name is required'); return false }
+  if (!form.code) { message.warning('Site code is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.name) return message.warning('Site name is required')
-  if (!form.code) return message.warning('Site code is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await siteApi.update(editingItem.value.id, { ...form })
       message.success('Site updated')
@@ -263,17 +274,15 @@ async function handleSave() {
       message.success('Site created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    const resp = err.response?.data
-    if (resp?.errors) {
-      const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
-    } else {
-      message.error(resp?.message || 'Failed to save')
-    }
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await siteApi.store({ ...form })
+    message.success('Site created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

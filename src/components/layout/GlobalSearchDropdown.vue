@@ -75,35 +75,44 @@ import {
   ArrowRightOutlined,
   DashboardOutlined,
   BellOutlined,
-  TrophyOutlined,
-  FundProjectionScreenOutlined,
-  UsergroupAddOutlined,
+  FundOutlined,
   SolutionOutlined,
   TeamOutlined,
+  MailOutlined,
+  UsergroupAddOutlined,
   DollarOutlined,
   CalendarOutlined,
   ScheduleOutlined,
   FileTextOutlined,
-  AuditOutlined,
-  SmileOutlined,
+  CarryOutOutlined,
+  GiftOutlined,
   ReadOutlined,
-  OrderedListOutlined,
+  TagsOutlined,
+  ExperimentOutlined,
+  FileProtectOutlined,
   SwapOutlined,
-  LogoutOutlined,
+  UserDeleteOutlined,
   BarChartOutlined,
-  UploadOutlined,
+  ImportOutlined,
   BankOutlined,
   ApartmentOutlined,
   IdcardOutlined,
-  BlockOutlined,
-  SafetyCertificateOutlined,
+  PartitionOutlined,
+  InsuranceOutlined,
   PercentageOutlined,
+  OrderedListOutlined,
   CalculatorOutlined,
   SettingOutlined,
   UserOutlined,
   LockOutlined,
+  DatabaseOutlined,
   HistoryOutlined,
+  LineChartOutlined,
+  AuditOutlined,
   DeleteOutlined,
+  BugOutlined,
+  WarningOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -131,54 +140,65 @@ const searchableItems = [
   { key: 'dashboard', label: 'Dashboard', icon: DashboardOutlined, route: 'dashboard', section: 'Main', keywords: ['home', 'overview', 'main'] },
   { key: 'notifications', label: 'Notifications', icon: BellOutlined, route: 'notifications', section: 'Main', keywords: ['alerts', 'messages', 'bell'] },
   // Grants
-  { key: 'grants', label: 'Grants', icon: TrophyOutlined, route: 'grants', permission: 'grants', section: 'Grants', keywords: ['funding', 'projects', 'awards'] },
-  { key: 'grant-positions', label: 'Grant Positions', icon: FundProjectionScreenOutlined, route: 'grant-positions', permission: 'grant_positions', section: 'Grants', keywords: ['funding positions'] },
+  { key: 'grants', label: 'Grants', icon: FundOutlined, route: 'grants', permission: 'grants', section: 'Grants', keywords: ['funding', 'projects', 'awards'] },
+  { key: 'grant-positions', label: 'Grant Positions', icon: SolutionOutlined, route: 'grant-positions', permission: 'grant_positions', section: 'Grants', keywords: ['funding positions'] },
   // Recruitment
-  { key: 'interviews', label: 'Interviews', icon: UsergroupAddOutlined, route: 'interviews', permission: 'interviews', section: 'Recruitment', keywords: ['hiring', 'candidates', 'recruitment'] },
-  { key: 'job-offers', label: 'Job Offers', icon: SolutionOutlined, route: 'job-offers', permission: 'job_offers', section: 'Recruitment', keywords: ['offers', 'hiring', 'employment'] },
+  { key: 'interviews', label: 'Interviews', icon: TeamOutlined, route: 'interviews', permission: 'interviews', section: 'Recruitment', keywords: ['hiring', 'candidates', 'recruitment'] },
+  { key: 'job-offers', label: 'Job Offers', icon: MailOutlined, route: 'job-offers', permission: 'job_offers', section: 'Recruitment', keywords: ['offers', 'hiring', 'employment'] },
   // Management
-  { key: 'employees', label: 'Employees', icon: TeamOutlined, route: 'employees', permission: 'employees', section: 'Management', keywords: ['staff', 'workers', 'people', 'team'] },
+  { key: 'employees', label: 'Employees', icon: UsergroupAddOutlined, route: 'employees', permission: 'employees', section: 'Management', keywords: ['staff', 'workers', 'people', 'team'] },
   { key: 'payroll', label: 'Payroll', icon: DollarOutlined, route: 'payroll', permission: 'employee_salaries', section: 'Management', keywords: ['salary', 'wages', 'pay', 'compensation'] },
   // Leave
   { key: 'leave-requests', label: 'Leave Requests', icon: CalendarOutlined, route: 'leave-requests', permission: 'leave_requests', section: 'Leave', keywords: ['vacation', 'time off', 'absence', 'sick leave'] },
   { key: 'leave-balances', label: 'Leave Balances', icon: ScheduleOutlined, route: 'leave-balances', permission: 'leave_balances', section: 'Leave', keywords: ['remaining leave', 'balance', 'quota'] },
   { key: 'leave-types', label: 'Leave Types', icon: FileTextOutlined, route: 'leave-types', permission: 'leave_types', section: 'Leave', keywords: ['annual', 'sick', 'maternity'] },
   // Attendance
-  { key: 'attendance', label: 'Attendance', icon: AuditOutlined, route: 'attendance', permission: 'attendance', section: 'Attendance', keywords: ['check in', 'check out', 'time tracking', 'clock'] },
-  { key: 'holidays', label: 'Holidays', icon: SmileOutlined, route: 'holidays', permission: 'holidays', section: 'Attendance', keywords: ['public holidays', 'day off', 'calendar'] },
+  { key: 'attendance', label: 'Attendance', icon: CarryOutOutlined, route: 'attendance', permission: 'attendance', section: 'Attendance', keywords: ['check in', 'check out', 'time tracking', 'clock'] },
+  { key: 'holidays', label: 'Holidays', icon: GiftOutlined, route: 'holidays', permission: 'holidays', section: 'Attendance', keywords: ['public holidays', 'day off', 'calendar'] },
   // Training
   { key: 'training', label: 'Training', icon: ReadOutlined, route: 'training', permission: 'trainings', section: 'Training', keywords: ['courses', 'learning', 'development', 'workshops'] },
-  { key: 'training-types', label: 'Training Types', icon: OrderedListOutlined, route: 'training-types', permission: 'training_types', section: 'Training', keywords: ['course types', 'categories'] },
-  { key: 'employee-training', label: 'Employee Training', icon: SolutionOutlined, route: 'employee-training', permission: 'employee_training', section: 'Training', keywords: ['training records', 'courses completed'] },
+  { key: 'training-types', label: 'Training Types', icon: TagsOutlined, route: 'training-types', permission: 'training_types', section: 'Training', keywords: ['course types', 'categories'] },
+  { key: 'employee-training', label: 'Employee Training', icon: ExperimentOutlined, route: 'employee-training', permission: 'employee_training', section: 'Training', keywords: ['training records', 'courses completed'] },
   // HRM
-  { key: 'personnel-actions', label: 'Personnel Actions', icon: SwapOutlined, route: 'personnel-actions', permission: 'personnel_actions', section: 'HRM', keywords: ['actions', 'changes', 'personnel'] },
+  { key: 'personnel-actions', label: 'Personnel Actions', icon: FileProtectOutlined, route: 'personnel-actions', permission: 'personnel_actions', section: 'HRM', keywords: ['actions', 'changes', 'personnel'] },
   { key: 'transfers', label: 'Transfers', icon: SwapOutlined, route: 'transfers', permission: 'transfers', section: 'HRM', keywords: ['transfer', 'relocation', 'move'] },
-  { key: 'resignations', label: 'Resignations', icon: LogoutOutlined, route: 'resignations', permission: 'resignations', section: 'HRM', keywords: ['resign', 'quit', 'termination', 'separation'] },
+  { key: 'resignations', label: 'Resignations', icon: UserDeleteOutlined, route: 'resignations', permission: 'resignations', section: 'HRM', keywords: ['resign', 'quit', 'termination', 'separation'] },
   // Reports
   { key: 'reports', label: 'Reports', icon: BarChartOutlined, route: 'reports', permission: 'reports', section: 'Reports', keywords: ['analytics', 'statistics', 'charts', 'data'] },
   // Data Management
-  { key: 'data-import', label: 'Data Import', icon: UploadOutlined, route: 'data-import', permission: 'employees', section: 'Data Management', keywords: ['import', 'upload', 'csv', 'excel'] },
+  { key: 'data-import', label: 'Data Import', icon: ImportOutlined, route: 'data-import', permission: 'employees', section: 'Data Management', keywords: ['import', 'upload', 'csv', 'excel'] },
   // Organization
   { key: 'sites', label: 'Sites', icon: BankOutlined, route: 'sites', permission: 'sites', section: 'Organization', keywords: ['locations', 'offices', 'branches'] },
   { key: 'departments', label: 'Departments', icon: ApartmentOutlined, route: 'departments', permission: 'departments', section: 'Organization', keywords: ['divisions', 'units', 'teams'] },
   { key: 'positions', label: 'Positions', icon: IdcardOutlined, route: 'positions', permission: 'positions', section: 'Organization', keywords: ['roles', 'titles', 'job titles'] },
-  { key: 'section-departments', label: 'Section Departments', icon: BlockOutlined, route: 'section-departments', permission: 'section_departments', section: 'Organization', keywords: ['sections', 'sub-departments'] },
+  { key: 'section-departments', label: 'Section Departments', icon: PartitionOutlined, route: 'section-departments', permission: 'section_departments', section: 'Organization', keywords: ['sections', 'sub-departments'] },
   // Settings
-  { key: 'benefit-settings', label: 'Benefit Settings', icon: SafetyCertificateOutlined, route: 'benefit-settings', permission: 'benefit_settings', section: 'Settings', keywords: ['benefits', 'insurance', 'perks'] },
+  { key: 'benefit-settings', label: 'Benefit Settings', icon: InsuranceOutlined, route: 'benefit-settings', permission: 'benefit_settings', section: 'Settings', keywords: ['benefits', 'insurance', 'perks'] },
   { key: 'tax-settings', label: 'Tax Settings', icon: PercentageOutlined, route: 'tax-settings', permission: 'tax_settings', section: 'Settings', keywords: ['tax', 'deductions', 'withholding'] },
   { key: 'tax-brackets', label: 'Tax Brackets', icon: OrderedListOutlined, route: 'tax-brackets', permission: 'tax_settings', section: 'Settings', keywords: ['tax rates', 'brackets', 'tiers'] },
   { key: 'tax-calculator', label: 'Tax Calculator', icon: CalculatorOutlined, route: 'tax-calculator', permission: 'tax_settings', section: 'Settings', keywords: ['calculate tax', 'compute', 'estimation'] },
   { key: 'payroll-policy-settings', label: 'Payroll Policies', icon: SettingOutlined, route: 'payroll-policy-settings', permission: 'payroll_items', section: 'Settings', keywords: ['payroll rules', 'policies', 'configuration'] },
-  // Administration
+  // Administration (HR Manager: users/roles by permission; Admin: lookups, login history, user activity by role)
   { key: 'admin-users', label: 'Users', icon: UserOutlined, route: 'admin-users', permission: 'users', section: 'Administration', keywords: ['admin', 'user management', 'accounts'] },
   { key: 'admin-roles', label: 'Roles', icon: LockOutlined, route: 'admin-roles', permission: 'roles', section: 'Administration', keywords: ['permissions', 'access control'] },
+  { key: 'lookups', label: 'Lookup Data', icon: DatabaseOutlined, route: 'lookups', permission: 'lookups', section: 'Administration', keywords: ['dropdowns', 'reference data', 'predefined', 'options'] },
+  { key: 'login-history', label: 'Login History', icon: HistoryOutlined, route: 'login-history', role: 'admin', section: 'Administration', keywords: ['logins', 'security', 'authentication', 'sessions'] },
+  { key: 'user-activity', label: 'User Activity', icon: LineChartOutlined, route: 'user-activity', role: 'admin', section: 'Administration', keywords: ['usage', 'active users', 'inactive', 'report'] },
   // System
-  { key: 'activity-logs', label: 'Activity Log', icon: HistoryOutlined, route: 'activity-logs', section: 'System', keywords: ['audit', 'history', 'changes', 'log'] },
+  { key: 'system-health', label: 'System Health', icon: DashboardOutlined, route: 'system-health', role: 'admin', section: 'System', keywords: ['health', 'status', 'database', 'cache', 'storage', 'queue'] },
+  { key: 'error-logs', label: 'Error Logs', icon: BugOutlined, route: 'error-logs', role: 'admin', section: 'System', keywords: ['errors', 'bugs', 'exceptions', 'crashes'] },
+  { key: 'failed-jobs', label: 'Failed Jobs', icon: WarningOutlined, route: 'failed-jobs', role: 'admin', section: 'System', keywords: ['jobs', 'queue', 'failed', 'retry', 'payroll processing'] },
+  { key: 'performance', label: 'Performance', icon: ThunderboltOutlined, route: 'performance', role: 'admin', section: 'System', keywords: ['speed', 'slow', 'response time', 'metrics', 'api'] },
+  { key: 'activity-logs', label: 'Activity Log', icon: AuditOutlined, route: 'activity-logs', permission: 'activity_logs', section: 'System', keywords: ['audit', 'history', 'changes', 'log'] },
   { key: 'recycle-bin', label: 'Recycle Bin', icon: DeleteOutlined, route: 'recycle-bin', permission: 'recycle_bin', section: 'System', keywords: ['deleted', 'trash', 'restore'] },
 ]
 
 const accessibleItems = computed(() =>
-  searchableItems.filter(item => !item.permission || authStore.canRead(item.permission))
+  searchableItems.filter(item => {
+    if (item.role) return authStore.hasRole(item.role)
+    if (item.permission) return authStore.canRead(item.permission)
+    return true
+  })
 )
 
 const filteredItems = computed(() => {

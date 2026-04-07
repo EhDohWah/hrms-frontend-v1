@@ -1,7 +1,14 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <div>
+      <div class="page-header-stats">
+        <a-select
+          v-model:value="filters.year"
+          style="width: 90px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</a-select-option>
+        </a-select>
         <a-tag color="default">{{ pagination.total || 0 }} Total</a-tag>
       </div>
       <div class="filter-bar">
@@ -10,13 +17,45 @@
           placeholder="Search by employee..."
           allow-clear
           class="filter-input"
-          style="width: 240px"
+          style="width: 220px"
           @pressEnter="onSearchOrFilterChange"
           @clear="onSearchOrFilterChange"
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <a-select v-model:value="filters.status" placeholder="Status" allow-clear class="filter-input" style="width: 140px" @change="onSearchOrFilterChange">
+        <a-select
+          v-model:value="filters.organization"
+          placeholder="All Orgs"
+          allow-clear
+          class="filter-input"
+          style="width: 110px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="org in ORG_OPTIONS" :key="org.code" :value="org.code">{{ org.code }}</a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.site_id"
+          placeholder="Site"
+          allow-clear
+          show-search
+          :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())"
+          :loading="sitesLoading"
+          class="filter-input"
+          style="width: 150px"
+          @change="onSearchOrFilterChange"
+        >
+          <a-select-option v-for="site in siteOptions" :key="site.id" :value="site.id" :label="site.name">
+            {{ site.name }}
+          </a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filters.status"
+          placeholder="Status"
+          allow-clear
+          class="filter-input"
+          style="width: 130px"
+          @change="onSearchOrFilterChange"
+        >
           <a-select-option value="pending">Pending</a-select-option>
           <a-select-option value="approved">Approved</a-select-option>
           <a-select-option value="declined">Declined</a-select-option>
@@ -44,25 +83,40 @@
         :row-key="(r) => r.id"
         :pagination="tablePagination"
         :row-selection="authStore.canDelete('leave_requests') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
-        :scroll="{ x: 'max-content', y: 600 }"
-        :virtual="true"
-        @change="handleTableChange"
+        :scroll="{ x: 'max-content' }"
         size="middle"
+        @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'employee'">
+          <template v-if="column.key === 'organization'">
+            <a-tag :color="getOrgColor(record.employee?.organization)" size="small">
+              {{ record.employee?.organization || '—' }}
+            </a-tag>
+          </template>
+
+          <template v-else-if="column.key === 'employee'">
             <div class="cell-employee">
               <span class="cell-name">{{ record.employee?.first_name_en }} {{ record.employee?.last_name_en }}</span>
-              <span class="cell-staff-id font-mono">{{ record.employee?.staff_id }}</span>
+              <span class="cell-sub font-mono">{{ record.employee?.staff_id }}</span>
             </div>
           </template>
 
+          <template v-else-if="column.key === 'site'">
+            {{ record.employee?.employment?.site?.name || '—' }}
+          </template>
+
+          <template v-else-if="column.key === 'position'">
+            {{ record.employee?.employment?.position?.title || '—' }}
+          </template>
+
           <template v-else-if="column.key === 'leave_type'">
-            {{ record.items?.[0]?.leave_type?.name || '—' }}
+            {{ getLeaveTypeNames(record) }}
           </template>
 
           <template v-else-if="column.key === 'dates'">
-            {{ formatDate(record.start_date) }} → {{ formatDate(record.end_date) }}
+            <span class="font-mono">{{ formatDate(record.start_date) }}</span>
+            <span class="date-arrow"> → </span>
+            <span class="font-mono">{{ formatDate(record.end_date) }}</span>
           </template>
 
           <template v-else-if="column.key === 'status'">
@@ -71,6 +125,7 @@
 
           <template v-else-if="column.key === 'actions'">
             <a-space :size="0">
+              <a-button size="small" type="link" @click="openView(record)">View</a-button>
               <a-button
                 v-if="authStore.canUpdate('leave_requests')"
                 size="small"
@@ -107,6 +162,7 @@
         <!-- Employee -->
         <a-form-item label="Employee" required>
           <a-select
+            ref="employeeSelectRef"
             v-model:value="form.employee_id"
             placeholder="Search employee by name or staff ID..."
             show-search
@@ -183,12 +239,10 @@
               </div>
               <div>
                 <div class="item-label">Days</div>
-                <a-input
-                  :value="item.days ?? '—'"
-                  size="small"
-                  read-only
-                  class="days-readonly"
-                />
+                <div class="days-display">
+                  <span class="days-value font-mono">{{ item.days ?? '—' }}</span>
+                  <span v-if="item.days != null" class="days-unit">working days</span>
+                </div>
               </div>
               <div>
                 <div class="item-label">Balance</div>
@@ -250,16 +304,16 @@
 
         <!-- Approval Information -->
         <a-divider orientation="left" orientation-margin="0" style="font-size: 13px; color: var(--color-text-secondary)">
-          Approval Information
+          Acknowledgement Information
         </a-divider>
-        <div class="approval-hint">Record approval status and dates as shown on physical forms</div>
+        <div class="approval-hint">Record acknowledgement status and dates as shown on physical forms</div>
 
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item>
-              <a-checkbox v-model:checked="form.supervisor_approved">Supervisor Approved</a-checkbox>
+              <a-checkbox v-model:checked="form.supervisor_approved">Supervisor Acknowledged</a-checkbox>
             </a-form-item>
-            <a-form-item v-if="form.supervisor_approved" label="Supervisor Approval Date">
+            <a-form-item v-if="form.supervisor_approved" label="Supervisor Acknowledgement Date">
               <a-date-picker
                 v-model:value="form.supervisor_approved_date"
                 format="DD MMM YYYY"
@@ -270,9 +324,9 @@
           </a-col>
           <a-col :span="12">
             <a-form-item>
-              <a-checkbox v-model:checked="form.hr_site_admin_approved">HR/Site Admin Approved</a-checkbox>
+              <a-checkbox v-model:checked="form.hr_site_admin_approved">HR/Site Admin Acknowledged</a-checkbox>
             </a-form-item>
-            <a-form-item v-if="form.hr_site_admin_approved" label="HR/Site Admin Approval Date">
+            <a-form-item v-if="form.hr_site_admin_approved" label="HR/Site Admin Acknowledgement Date">
               <a-date-picker
                 v-model:value="form.hr_site_admin_approved_date"
                 format="DD MMM YYYY"
@@ -310,25 +364,71 @@
         />
 
         <div class="modal-footer">
-          <a-button @click="closeModal">Cancel</a-button>
-          <a-button type="primary" html-type="submit" :loading="saving">
-            {{ editingId ? 'Save Changes' : 'Create' }}
+          <a-button :disabled="saving || savingAnother" @click="closeModal">Cancel</a-button>
+          <a-button
+            v-if="!editingId"
+            :loading="savingAnother"
+            :disabled="saving"
+            @click="handleSaveAndAddAnother"
+          >
+            Save & Add Another
+          </a-button>
+          <a-button type="primary" html-type="submit" :loading="saving" :disabled="savingAnother">
+            {{ editingId ? 'Update' : 'Save' }}
           </a-button>
         </div>
       </a-form>
+    </a-modal>
+
+    <!-- Leave Request Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewRecord" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :org="viewOrgConfig"
+          :title="viewTitle"
+          :ref-id="viewRefId"
+          icon="calendar-event"
+          badge="Leave Request"
+          :status="viewStatusKey"
+          :status-label="viewRecord.status"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, createVNode } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { leaveApi } from '@/api/leaveApi'
 import { employeeApi } from '@/api/employeeApi'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { formatDate } from '@/utils/formatters'
+import { ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
+import { siteApi } from '@/api'
+import RecordView from '@/components/common/RecordView.vue'
 import {
   SearchOutlined, PlusOutlined, ExclamationCircleOutlined,
   DeleteOutlined, LoadingOutlined, WarningOutlined,
@@ -344,17 +444,25 @@ const requests = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
 const search = ref('')
-const filters = reactive({ status: undefined })
+const filters = reactive({ status: undefined, organization: undefined, year: new Date().getFullYear(), site_id: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
 
+const yearOptions = computed(() => {
+  const current = new Date().getFullYear()
+  return Array.from({ length: 5 }, (_, i) => current - 2 + i)
+})
+
 const columns = [
-  { title: 'Employee', key: 'employee', width: 200 },
-  { title: 'Leave Type', key: 'leave_type', width: 160 },
-  { title: 'Dates', key: 'dates', width: 240 },
+  { title: 'Org', key: 'organization', width: 80, align: 'center' },
+  { title: 'Employee', key: 'employee', width: 190 },
+  { title: 'Site', key: 'site', width: 130, ellipsis: true },
+  { title: 'Position', key: 'position', width: 150, ellipsis: true },
+  { title: 'Leave Type', key: 'leave_type', width: 160, ellipsis: true },
+  { title: 'Dates', key: 'dates', width: 230 },
   { title: 'Total Days', dataIndex: 'total_days', width: 100, align: 'center' },
   { title: 'Reason', dataIndex: 'reason', ellipsis: true },
   { title: 'Status', key: 'status', width: 110 },
-  { title: 'Actions', key: 'actions', width: 130, align: 'right' },
+  { title: 'Actions', key: 'actions', width: 160, align: 'right', fixed: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -370,13 +478,25 @@ const tablePagination = computed(() => ({
 
 const modalVisible = ref(false)
 const editingId = ref(null)
-const saving = ref(false)
+function resetForAddAnother() {
+  Object.assign(form, defaultForm())
+  resetModalState()
+  employees.value = []
+  employeeSearchQuery.value = ''
+}
+
+const { savingMain: saving, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchRequests,
+  reset: resetForAddAnother,
+  focus: () => nextTick(() => employeeSelectRef.value?.focus?.()),
+})
+const employeeSelectRef = ref(null)
 
 const defaultItem = () => ({ leave_type_id: undefined, start_date: null, end_date: null, days: null })
 
 const defaultForm = () => ({
   employee_id: undefined,
-  status: undefined,
+  status: 'pending',
   reason: '',
   items: [defaultItem()],
   supervisor_approved: false,
@@ -387,6 +507,20 @@ const defaultForm = () => ({
 })
 
 const form = reactive(defaultForm())
+
+// ── Site options ──────────────────────────────────────────────────────────────
+
+const siteOptions = ref([])
+const sitesLoading = ref(false)
+
+async function loadSiteOptions() {
+  sitesLoading.value = true
+  try {
+    const { data } = await siteApi.options()
+    siteOptions.value = data?.data || []
+  } catch { /* non-critical */ }
+  finally { sitesLoading.value = false }
+}
 
 // ── Options for dropdowns ─────────────────────────────────────────────────────
 
@@ -443,6 +577,10 @@ async function searchEmployees(query) {
 function statusColor(status) {
   const map = { pending: 'orange', approved: 'green', declined: 'red', cancelled: 'default' }
   return map[status?.toLowerCase()] || 'default'
+}
+
+function getLeaveTypeNames(record) {
+  return record.items?.map(i => i.leave_type?.name).filter(Boolean).join(', ') || '—'
 }
 
 const requiresAttachment = computed(() =>
@@ -509,7 +647,6 @@ async function onItemDateChange(index) {
   } catch { /* silent */ }
 }
 
-/** Derive request-level start/end from all items */
 function getDerivedDateRange() {
   const starts = form.items.map(i => i.start_date).filter(Boolean).sort()
   const ends = form.items.map(i => i.end_date).filter(Boolean).sort()
@@ -553,6 +690,9 @@ async function fetchRequests() {
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
       ...(filters.status && { status: filters.status }),
+      ...(filters.organization && { filter_organization: filters.organization }),
+      ...(filters.year && { filter_year: filters.year }),
+      ...(filters.site_id && { filter_site_id: filters.site_id }),
     }
     const { data } = await leaveApi.requests(params, { signal: getSignal() })
     requests.value = data.data || []
@@ -586,6 +726,7 @@ function openCreate() {
   resetModalState()
   modalVisible.value = true
   loadModalOptions()
+  focusEmployeeSelect()
 }
 
 function openEdit(record) {
@@ -637,39 +778,41 @@ function removeItem(index) {
 
 // ── Create / Update ───────────────────────────────────────────────────────────
 
-async function handleSave() {
-  if (!form.employee_id) { message.warning('Please select an employee'); return }
-  const incompleteItem = form.items.some((i) => !i.leave_type_id || !i.start_date || !i.end_date || !i.days)
-  if (incompleteItem) {
+function validateForm() {
+  if (!form.employee_id) { message.warning('Please select an employee'); return false }
+  if (form.items.some((i) => !i.leave_type_id || !i.start_date || !i.end_date || !i.days)) {
     message.warning('Please fill in all fields for each leave item (type, dates)')
-    return
+    return false
   }
   if (requiresAttachment.value && !form.attachment_notes?.trim()) {
     message.warning('Attachment notes are required for the selected leave type')
-    return
+    return false
   }
+  return true
+}
 
-  saving.value = true
+function buildPayload() {
+  const { start_date, end_date } = getDerivedDateRange()
+  return {
+    employee_id: form.employee_id,
+    start_date,
+    end_date,
+    ...(form.status && { status: form.status }),
+    ...(form.reason?.trim() && { reason: form.reason.trim() }),
+    items: form.items.map((i) => ({ leave_type_id: i.leave_type_id, days: i.days })),
+    supervisor_approved: form.supervisor_approved,
+    ...(form.supervisor_approved && form.supervisor_approved_date && { supervisor_approved_date: form.supervisor_approved_date }),
+    hr_site_admin_approved: form.hr_site_admin_approved,
+    ...(form.hr_site_admin_approved && form.hr_site_admin_approved_date && { hr_site_admin_approved_date: form.hr_site_admin_approved_date }),
+    ...(form.attachment_notes?.trim() && { attachment_notes: form.attachment_notes.trim() }),
+  }
+}
 
-  // Overlap check
-  const noOverlap = await checkOverlap()
-  if (!noOverlap) { saving.value = false; return }
-  try {
-    const { start_date, end_date } = getDerivedDateRange()
-    const payload = {
-      employee_id: form.employee_id,
-      start_date,
-      end_date,
-      ...(form.status && { status: form.status }),
-      ...(form.reason?.trim() && { reason: form.reason.trim() }),
-      items: form.items.map((i) => ({ leave_type_id: i.leave_type_id, days: i.days })),
-      supervisor_approved: form.supervisor_approved,
-      ...(form.supervisor_approved && form.supervisor_approved_date && { supervisor_approved_date: form.supervisor_approved_date }),
-      hr_site_admin_approved: form.hr_site_admin_approved,
-      ...(form.hr_site_admin_approved && form.hr_site_admin_approved_date && { hr_site_admin_approved_date: form.hr_site_admin_approved_date }),
-      ...(form.attachment_notes?.trim() && { attachment_notes: form.attachment_notes.trim() }),
-    }
-
+async function handleSave() {
+  if (!validateForm()) return
+  if (!await checkOverlap()) return
+  await submitMain(async () => {
+    const payload = buildPayload()
     if (editingId.value) {
       await leaveApi.requestUpdate(editingId.value, payload)
       message.success('Leave request updated successfully')
@@ -677,16 +820,17 @@ async function handleSave() {
       await leaveApi.requestStore(payload)
       message.success('Leave request created successfully')
     }
-
     closeModal()
-    fetchRequests()
-  } catch (err) {
-    const errors = err.response?.data?.errors
-    const firstError = errors ? Object.values(errors)[0]?.[0] : null
-    message.error(firstError || err.response?.data?.message || 'Failed to save leave request')
-  } finally {
-    saving.value = false
-  }
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  if (!await checkOverlap()) return
+  await submitAnother(async () => {
+    await leaveApi.requestStore(buildPayload())
+    message.success('Leave request created — ready for next entry')
+  })
 }
 
 // ── Delete (single row) ───────────────────────────────────────────────────────
@@ -737,7 +881,161 @@ function handleBulkDelete() {
   })
 }
 
-onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
+// ── Record View Modal ────────────────────────────────────────────────────────
+
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewRecord = ref(null)
+
+const viewOrgConfig = computed(() => ORG_RECORD_VIEW_CONFIG[viewRecord.value?.employee?.organization] ?? null)
+
+const viewTitle = computed(() => {
+  const emp = viewRecord.value?.employee
+  if (!emp) return 'Leave Request'
+  return `${emp.first_name_en} ${emp.last_name_en}`
+})
+
+const viewRefId = computed(() => viewRecord.value?.employee?.staff_id || null)
+
+const viewStatusMap = { pending: 'ending-soon', approved: 'active', declined: 'expired', cancelled: 'expired' }
+const viewStatusKey = computed(() => viewStatusMap[viewRecord.value?.status?.toLowerCase()] || 'ending-soon')
+
+const viewStatusMeta = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const meta = []
+  if (r.start_date && r.end_date) {
+    meta.push({ icon: 'calendar', text: `${formatDate(r.start_date)} → ${formatDate(r.end_date)}` })
+  }
+  if (r.total_days != null) {
+    meta.push({ icon: 'clock', text: `${r.total_days} day(s)` })
+  }
+  const typeNames = getLeaveTypeNames(r)
+  if (typeNames && typeNames !== '—') {
+    meta.push({ icon: 'leaf', text: typeNames })
+  }
+  return meta
+})
+
+const viewSections = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const emp = r.employee
+  const employment = emp?.employment
+
+  const sections = []
+
+  // Employee section
+  if (emp) {
+    sections.push({
+      title: 'Employee', icon: 'user', type: 'avatar_fields',
+      initials: `${emp.first_name_en?.[0] || ''}${emp.last_name_en?.[0] || ''}`,
+      name: `${emp.first_name_en} ${emp.last_name_en}`,
+      subtitle: employment?.position?.title || '—',
+      fields: [
+        { label: 'Staff ID', value: emp.staff_id, mono: true },
+        { label: 'Organization', value: emp.organization },
+        { label: 'Site', value: employment?.site?.name },
+        { label: 'Department', value: employment?.department?.name },
+      ],
+    })
+  }
+
+  // Leave Request Overview
+  sections.push({
+    title: 'Leave Request Details', icon: 'calendar-event', type: 'fields',
+    fields: [
+      { label: 'Status', value: r.status },
+      { label: 'Total Days', value: r.total_days != null ? `${r.total_days} day(s)` : null, mono: true },
+      { label: 'Start Date', value: formatDate(r.start_date), mono: true },
+      { label: 'End Date', value: formatDate(r.end_date), mono: true },
+      ...(r.reason ? [{ label: 'Reason', value: r.reason, fullWidth: true }] : []),
+      ...(r.attachment_notes ? [{ label: 'Attachment Notes', value: r.attachment_notes, fullWidth: true }] : []),
+    ],
+  })
+
+  // Leave Items table
+  if (r.items?.length > 0) {
+    let totalDays = 0
+    r.items.forEach(item => { totalDays += Number(item.days) || 0 })
+
+    sections.push({
+      title: 'Leave Items', icon: 'list-details', type: 'table',
+      headers: ['#', 'Leave Type', 'Days'],
+      aligns: { 0: 'text-center', 2: 'text-center' },
+      monoCols: [0, 2],
+      rows: r.items.map((item, idx) => [
+        String(idx + 1),
+        item.leave_type?.name || '—',
+        item.days != null ? String(item.days) : '—',
+      ]),
+      ...(r.items.length > 1 ? {
+        summary: {
+          label: `Total (${r.items.length} items)`,
+          colspan: 2,
+          values: [String(totalDays)],
+        },
+      } : {}),
+    })
+  }
+
+  // Acknowledgement section
+  const approvalSteps = [
+    {
+      label: 'Supervisor',
+      name: r.supervisor_approved ? 'Acknowledged' : 'Pending',
+      approved: !!r.supervisor_approved,
+      date: r.supervisor_approved_date ? formatDate(r.supervisor_approved_date) : null,
+    },
+    {
+      label: 'HR / Site Admin',
+      name: r.hr_site_admin_approved ? 'Acknowledged' : 'Pending',
+      approved: !!r.hr_site_admin_approved,
+      date: r.hr_site_admin_approved_date ? formatDate(r.hr_site_admin_approved_date) : null,
+    },
+  ]
+  sections.push({ title: 'Acknowledgement', icon: 'check', type: 'approval', steps: approvalSteps })
+
+  // Record Information
+  sections.push({
+    title: 'Record Information', icon: 'info-circle', type: 'fields',
+    fields: [
+      { label: 'Created By', value: r.created_by },
+      { label: 'Updated By', value: r.updated_by },
+      { label: 'Created At', value: formatDate(r.created_at), mono: true },
+      { label: 'Updated At', value: formatDate(r.updated_at), mono: true },
+    ],
+  })
+
+  return sections
+})
+
+async function openView(record) {
+  viewRecord.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await leaveApi.requestShow(record.id)
+    viewRecord.value = data.data || data
+  } catch {
+    message.error('Failed to load leave request details')
+    viewModalVisible.value = false
+  }
+  viewLoading.value = false
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const record = viewRecord.value
+  viewModalVisible.value = false
+  if (record) openEdit(record)
+}
+
+onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests(); loadSiteOptions() })
+onUnmounted(() => { if (employeeSearchTimer) clearTimeout(employeeSearchTimer) })
 </script>
 
 <style scoped>
@@ -756,9 +1054,17 @@ onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
   }
 }
 
+.page-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .cell-employee { display: flex; flex-direction: column; }
-.cell-name { font-weight: 600; font-size: 13.5px; }
-.cell-staff-id { font-size: 12px; color: var(--color-text-muted); }
+.cell-name { font-weight: 600; font-size: 13px; }
+.cell-sub { font-size: 12px; color: var(--color-text-muted); }
+.date-arrow { color: var(--color-text-muted); margin: 0 2px; }
 
 .modal-form { margin-top: 16px; }
 
@@ -805,14 +1111,24 @@ onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
 }
 .required-mark { color: var(--color-danger); }
 
-.days-readonly {
-  text-align: center;
-  background: var(--color-bg-muted) !important;
-  cursor: default;
+.days-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--color-bg-muted);
+  border-radius: var(--radius-sm);
+  min-height: 24px;
 }
-.days-readonly :deep(input) {
-  text-align: center;
-  cursor: default;
+.days-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.days-unit {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .balance-badge {
@@ -825,13 +1141,13 @@ onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
   background: var(--color-bg-muted);
   color: var(--color-text-secondary);
 }
-.balance-ok { background: #f0fdf4; color: #16a34a; }
-.balance-warning-color { background: #fffbeb; color: #d97706; }
-.balance-danger { background: #fef2f2; color: #dc2626; }
+.balance-ok { background: var(--color-success-bg); color: var(--color-success); }
+.balance-warning-color { background: #fffbeb; color: var(--color-warning); }
+.balance-danger { background: var(--color-danger-bg); color: var(--color-danger); }
 
 .balance-warning {
   font-size: 12px;
-  color: #d97706;
+  color: var(--color-warning);
   margin-top: 8px;
   padding: 8px 12px;
   background: #fffbeb;
@@ -848,12 +1164,44 @@ onMounted(() => { appStore.setPageMeta('Leave Requests'); fetchRequests() })
   margin-bottom: 12px;
 }
 
-.modal-footer {
+/* ── Record View Modal ── */
+.view-loading-state {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-light);
+  justify-content: center;
+  align-items: center;
+  padding: 64px 0;
+}
+.view-modal-wrap {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.view-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.view-close-btn:hover {
+  background: rgba(255,255,255,0.35);
+  color: #fff;
+  transform: scale(1.08);
+}
+.view-close-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.6);
+  outline-offset: 2px;
 }
 </style>

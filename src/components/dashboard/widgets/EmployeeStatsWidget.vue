@@ -8,8 +8,8 @@
           <span class="mini-stat-label">Total</span>
         </div>
         <div class="mini-stat">
-          <span class="mini-stat-value">{{ data.new_this_month }}</span>
-          <span class="mini-stat-label">New This Month</span>
+          <span class="mini-stat-value">{{ data.new_joiners }}</span>
+          <span class="mini-stat-label">New Joiners</span>
         </div>
       </div>
 

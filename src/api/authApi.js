@@ -7,9 +7,6 @@ export const authApi = {
   logout() {
     return client.post('/logout')
   },
-  refreshToken() {
-    return client.post('/refresh-token')
-  },
   forgotPassword(email) {
     return client.post('/forgot-password', { email })
   },

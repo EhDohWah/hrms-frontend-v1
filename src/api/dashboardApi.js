@@ -27,4 +27,5 @@ export const dashboardApi = {
   openPositions: (config) => client.get('/dashboard/data/open-positions', config),
   pendingInterviews: (config) => client.get('/dashboard/data/pending-interviews', config),
   trainingOverview: (config) => client.get('/dashboard/data/training-overview', config),
+  resignationStats: (config) => client.get('/dashboard/data/resignation-stats', config),
 }

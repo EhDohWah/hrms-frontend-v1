@@ -7,7 +7,10 @@
           <a-button type="text" @click="$router.push({ name: 'training' })">
             <ArrowLeftOutlined /> Back to Training
           </a-button>
-          <h2 class="detail-title" v-if="training">{{ training.title }}</h2>
+          <h2 class="detail-title" v-if="training">
+            {{ training.title }}
+            <a-tag v-if="training.training_type" size="small" style="margin-left: 8px; vertical-align: middle;">{{ training.training_type.name }}</a-tag>
+          </h2>
         </div>
         <a-space v-if="training && authStore.canUpdate('trainings')">
           <a-button @click="openEditTraining">Edit Training</a-button>
@@ -35,7 +38,8 @@
           </a-col>
           <a-col :xs="12" :sm="6">
             <a-card size="small">
-              <a-statistic title="Enrolled" :value="attendees.length" />
+              <div class="stat-label">Enrolled</div>
+              <div class="stat-value">{{ attendees.length }}</div>
             </a-card>
           </a-col>
         </a-row>

@@ -40,6 +40,11 @@ export function setupGuards(router) {
       if (to.meta.permission && !auth.canRead(to.meta.permission)) {
         return { name: 'dashboard' }
       }
+
+      // Role check — for admin-only routes that don't use module permissions
+      if (to.meta.role && !auth.hasRole(to.meta.role)) {
+        return { name: 'dashboard' }
+      }
     }
 
     return true

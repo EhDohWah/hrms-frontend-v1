@@ -15,10 +15,10 @@
       </a-input>
       <div class="toolbar-actions">
         <a-button @click="bulkPayslipVisible = true">
-          <FilePdfOutlined /> Bulk Payslips
+          <FilePdfOutlined /> Download Payslips
         </a-button>
         <a-button v-if="canCreate" type="primary" @click="bulkVisible = true">
-          <ThunderboltOutlined /> Bulk Payroll
+          <ThunderboltOutlined /> Run Payroll
         </a-button>
       </div>
     </div>
@@ -104,7 +104,7 @@
 
 
     <!-- Standard View -->
-    <div v-if="viewMode === 'standard'" class="payroll-table-card">
+    <div v-if="viewMode === 'standard'" class="payroll-table-card payroll-outer-scroll">
       <a-table
         :columns="columns"
         :data-source="paginatedGroups"
@@ -129,6 +129,12 @@
           </template>
           <template v-else-if="column.key === 'status'">
             {{ record.employee_status }}
+          </template>
+          <template v-else-if="column.key === 'start_date'">
+            {{ record.start_date ? formatDate(record.start_date) : '—' }}
+          </template>
+          <template v-else-if="column.key === 'pass_probation_date'">
+            {{ record.pass_probation_date ? formatDate(record.pass_probation_date) : '—' }}
           </template>
           <template v-else-if="column.key === 'pay_period'">
             {{ formatDate(record.pay_period_date) }}
@@ -163,6 +169,9 @@
               </template>
               <template v-else-if="column.key === 'fte'">
                 {{ fmtFte(pr.display?.fte) }}
+              </template>
+              <template v-else-if="column.key === 'grant_position'">
+                {{ pr.display?.grant_position || '—' }}
               </template>
               <template v-else-if="column.key === 'net_salary'">
                 <strong style="color: var(--color-success)">{{ formatCurrency(text) }}</strong>
@@ -294,41 +303,44 @@ const canDelete = computed(() => authStore.canDelete('employee_salaries'))
 const columns = [
   { title: 'Organization', key: 'org', align: 'center', width: 100 },
   { title: 'Employee', key: 'employee', width: 180 },
-  { title: 'Department', dataIndex: 'department', key: 'department', width: 150, ellipsis: true },
-  { title: 'Position', dataIndex: 'position', key: 'position', width: 150, ellipsis: true },
   { title: 'Site', dataIndex: 'site', key: 'site', width: 100, ellipsis: true },
+  { title: 'Department', dataIndex: 'department', key: 'department', width: 150, ellipsis: true },
+  { title: 'Actual Position', dataIndex: 'position', key: 'position', width: 150, ellipsis: true },
   { title: 'Status', key: 'status', width: 90 },
+  { title: 'Start Date', key: 'start_date', width: 100 },
+  { title: 'Pass Probation', key: 'pass_probation_date', width: 110 },
   { title: 'Pay Period', key: 'pay_period', width: 100 },
   { title: 'Records', key: 'records', align: 'center', width: 70 },
   { title: 'Total Net', key: 'net', align: 'right', width: 120 },
 ]
 
 const innerColumns = [
-  { title: 'Grant Code', key: 'grant_code', fixed: 'left', width: 100 },
+  { title: 'Grant Code', key: 'grant_code', fixed: 'left', width: 100, ellipsis: true },
   { title: 'Grant Name', key: 'grant_name', width: 150, ellipsis: true },
-  { title: 'BL Code', key: 'bl_code', width: 90 },
-  { title: 'FTE', key: 'fte', width: 55, align: 'center' },
-  { title: 'Gross Salary', dataIndex: 'gross_salary', key: 'gross_salary', width: 110, align: 'right' },
-  { title: 'Gross by FTE', dataIndex: 'gross_salary_by_FTE', key: 'gross_by_fte', width: 110, align: 'right' },
-  { title: 'Retroactive', dataIndex: 'retroactive_salary', key: 'retroactive', width: 100, align: 'right' },
-  { title: '13th Month', dataIndex: 'thirteen_month_salary', key: 'thirteen_month', width: 100, align: 'right' },
-  { title: '13th Accrue', dataIndex: 'thirteen_month_salary_accured', key: 'thirteen_accrue', width: 100, align: 'right' },
-  { title: 'Sal. Increase', dataIndex: 'salary_increase', key: 'sal_increase', width: 100, align: 'right' },
-  { title: 'PVD', dataIndex: 'pvd', key: 'pvd', width: 85, align: 'right' },
-  { title: 'PVD Employer', dataIndex: 'pvd_employer', key: 'pvd_employer', width: 105, align: 'right' },
-  { title: 'Saving Fund', dataIndex: 'saving_fund', key: 'saving_fund', width: 100, align: 'right' },
-  { title: 'SF Employer', dataIndex: 'saving_fund_employer', key: 'sf_employer', width: 100, align: 'right' },
-  { title: 'Emp. SSF', dataIndex: 'employee_social_security', key: 'emp_ssf', width: 90, align: 'right' },
-  { title: 'Empr. SSF', dataIndex: 'employer_social_security', key: 'empr_ssf', width: 90, align: 'right' },
-  { title: 'Emp. H/W', dataIndex: 'employee_health_welfare', key: 'emp_hw', width: 90, align: 'right' },
-  { title: 'Empr. H/W', dataIndex: 'employer_health_welfare', key: 'empr_hw', width: 90, align: 'right' },
-  { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 85, align: 'right' },
-  { title: 'Student Loan', dataIndex: 'student_loan', key: 'student_loan', width: 95, align: 'right' },
-  { title: 'Total Salary', dataIndex: 'total_salary', key: 'total_salary', width: 110, align: 'right' },
-  { title: 'Total Income', dataIndex: 'total_income', key: 'total_income', width: 110, align: 'right' },
-  { title: 'Empr. Contrib.', dataIndex: 'employer_contribution', key: 'empr_contrib', width: 110, align: 'right' },
-  { title: 'Total Deduction', dataIndex: 'total_deduction', key: 'total_deduction', width: 115, align: 'right' },
-  { title: 'Net Salary', dataIndex: 'net_salary', key: 'net_salary', width: 110, align: 'right' },
+  { title: 'BL Code', key: 'bl_code', width: 90, ellipsis: true, customHeaderCell: () => ({ title: 'Budgetline Code' }) },
+  { title: 'FTE', key: 'fte', width: 55, align: 'center', customHeaderCell: () => ({ title: 'Full-Time Equivalent' }) },
+  { title: 'Position Under Grant', key: 'grant_position', width: 160, ellipsis: true },
+  { title: 'Gross Salary', dataIndex: 'gross_salary', key: 'gross_salary', width: 110, align: 'right', ellipsis: true },
+  { title: 'Gross by FTE', dataIndex: 'gross_salary_by_FTE', key: 'gross_by_fte', width: 110, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Gross Salary by FTE' }) },
+  { title: 'Retroactive', dataIndex: 'retroactive_salary', key: 'retroactive', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Retroactive Salary' }) },
+  { title: '13th Month', dataIndex: 'thirteen_month_salary', key: 'thirteen_month', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: '13th Month Salary' }) },
+  { title: '13th Accrue', dataIndex: 'thirteen_month_salary_accured', key: 'thirteen_accrue', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: '13th Month Salary Accrued' }) },
+  { title: 'Sal. Increase', dataIndex: 'salary_increase', key: 'sal_increase', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Salary Increase' }) },
+  { title: 'PVD Employee', dataIndex: 'pvd', key: 'pvd', width: 85, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Provident Fund (Employee)' }) },
+  { title: 'PVD Employer', dataIndex: 'pvd_employer', key: 'pvd_employer', width: 105, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Provident Fund (Employer)' }) },
+  { title: 'SF Employee', dataIndex: 'saving_fund', key: 'saving_fund', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Saving Fund (Employee)' }) },
+  { title: 'SF Employer', dataIndex: 'saving_fund_employer', key: 'sf_employer', width: 100, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Saving Fund (Employer)' }) },
+  { title: 'Emp. SSF', dataIndex: 'employee_social_security', key: 'emp_ssf', width: 90, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Employee Social Security Fund' }) },
+  { title: 'Empr. SSF', dataIndex: 'employer_social_security', key: 'empr_ssf', width: 90, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Employer Social Security Fund' }) },
+  { title: 'Emp. H/W', dataIndex: 'employee_health_welfare', key: 'emp_hw', width: 90, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Employee Health & Welfare' }) },
+  { title: 'Empr. H/W', dataIndex: 'employer_health_welfare', key: 'empr_hw', width: 90, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Employer Health & Welfare' }) },
+  { title: 'Tax', dataIndex: 'tax', key: 'tax', width: 85, align: 'right', ellipsis: true },
+  { title: 'Student Loan', dataIndex: 'student_loan', key: 'student_loan', width: 95, align: 'right', ellipsis: true },
+  { title: 'Total Salary', dataIndex: 'total_salary', key: 'total_salary', width: 110, align: 'right', ellipsis: true },
+  { title: 'Total Income', dataIndex: 'total_income', key: 'total_income', width: 110, align: 'right', ellipsis: true },
+  { title: 'Empr. Contrib.', dataIndex: 'employer_contribution', key: 'empr_contrib', width: 110, align: 'right', ellipsis: true, customHeaderCell: () => ({ title: 'Employer Contribution' }) },
+  { title: 'Total Deduction', dataIndex: 'total_deduction', key: 'total_deduction', width: 115, align: 'right', ellipsis: true },
+  { title: 'Net Salary', dataIndex: 'net_salary', key: 'net_salary', width: 110, align: 'right', ellipsis: true },
   { title: 'Notes', key: 'notes', width: 120, ellipsis: true },
   { title: 'Action', key: 'action', fixed: 'right', width: 150 },
 ]
@@ -406,6 +418,8 @@ const groupedData = computed(() => {
         position: pr.display?.position || '—',
         site: pr.display?.site || '—',
         employee_status: pr.display?.employee_status || '—',
+        start_date: pr.display?.start_date,
+        pass_probation_date: pr.display?.pass_probation_date,
         pay_period_date: pr.pay_period_date,
         payrolls: [],
         totalNet: 0,
@@ -602,6 +616,9 @@ onMounted(() => {
 /* Table helpers */
 .cell-sub { font-size: 12px; color: var(--color-text-muted); }
 .table-operation a { margin-right: 8px; }
+
+/* Outer table scrolls via CSS overflow, keeping inner table scroll independent */
+.payroll-outer-scroll { overflow-x: auto; }
 
 /* Compact nested table */
 .payroll-nested-table :deep(.ant-table-thead > tr > th) { font-size: 11px; white-space: nowrap; }

@@ -70,10 +70,9 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Holiday' : 'Add Holiday'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Name" required>
           <a-input v-model:value="form.name" placeholder="Enter holiday name" />
         </a-form-item>
@@ -90,6 +89,11 @@
         <a-form-item label="Description">
           <a-textarea v-model:value="form.description" placeholder="Enter description" :rows="2" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -102,6 +106,7 @@ import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-de
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { holidayApi } from '@/api'
 
 const dayjs = inject('$dayjs')
@@ -111,7 +116,9 @@ const getSignal = useAbortController()
 
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const filters = reactive({ year: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -190,11 +197,15 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.name) { message.warning('Name is required'); return false }
+  if (!form.date) { message.warning('Date is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.name) return message.warning('Name is required')
-  if (!form.date) return message.warning('Date is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await holidayApi.update(editingItem.value.id, { ...form })
       message.success('Holiday updated')
@@ -203,11 +214,15 @@ async function handleSave() {
       message.success('Holiday created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await holidayApi.store({ ...form })
+    message.success('Holiday created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {

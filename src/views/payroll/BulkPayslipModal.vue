@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="open"
-    title="Bulk Payslips"
+    title="Download Payslips"
     :width="480"
     :footer="null"
     :maskClosable="!downloading"

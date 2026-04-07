@@ -30,25 +30,56 @@
           </a-form-item>
         </a-col>
       </a-row>
-      <a-form-item label="Reason" required>
-        <a-input v-model:value="form.reason" placeholder="Enter reason for resignation" :maxlength="50" show-count />
+      <a-form-item label="Notes">
+        <a-textarea v-model:value="form.notes" placeholder="Notes (optional)" :rows="3" />
       </a-form-item>
-      <a-form-item label="Details">
-        <a-textarea v-model:value="form.reason_details" placeholder="Additional details (optional)" :rows="3" />
-      </a-form-item>
+      <!-- Acknowledgement Information -->
+      <a-divider orientation="left" orientation-margin="0" style="font-size: 13px; color: var(--color-text-secondary)">
+        Acknowledgement Information
+      </a-divider>
+      <div class="approval-hint">Record acknowledgement status and dates as shown on physical forms</div>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Supervisor Acknowledgement">
+            <a-select
+              v-model:value="form.supervisorStatus"
+              :options="ACKNOWLEDGEMENT_OPTIONS"
+              @change="(val) => onAcknowledgementChange(val, 'supervisor_approved_at')"
+            />
+          </a-form-item>
+          <a-form-item v-if="form.supervisorStatus !== 'pending'" label="Date">
+            <a-date-picker v-model:value="form.supervisor_approved_at" format="DD MMM YYYY" value-format="YYYY-MM-DD" style="width: 100%" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="HR Acknowledgement">
+            <a-select
+              v-model:value="form.hrStatus"
+              :options="ACKNOWLEDGEMENT_OPTIONS"
+              @change="(val) => onAcknowledgementChange(val, 'hr_manager_approved_at')"
+            />
+          </a-form-item>
+          <a-form-item v-if="form.hrStatus !== 'pending'" label="Date">
+            <a-date-picker v-model:value="form.hr_manager_approved_at" format="DD MMM YYYY" value-format="YYYY-MM-DD" style="width: 100%" />
+          </a-form-item>
+        </a-col>
+      </a-row>
 
       <div class="modal-footer">
         <a-button @click="$emit('update:open', false)">Cancel</a-button>
-        <a-button type="primary" danger :loading="saving" @click="handleSubmit">Submit Resignation</a-button>
+        <a-button :loading="savingAnother" :disabled="savingMain" @click="handleSubmitAndAddAnother">Save &amp; Add Another</a-button>
+        <a-button type="primary" danger :loading="savingMain" :disabled="savingAnother" @click="handleSubmit">Save Resignation</a-button>
       </div>
     </a-form>
   </a-modal>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import { resignationApi } from '@/api'
+import { useSaveAnother } from '@/composables/useSaveAnother'
+import { ACKNOWLEDGEMENT_OPTIONS, buildResignationPayload } from '@/constants/resignations'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -57,50 +88,58 @@ const props = defineProps({
 
 const emit = defineEmits(['update:open', 'submitted'])
 
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: () => emit('submitted'),
+  reset: resetForm,
+})
 
 const form = reactive({
   resignation_date: null,
   last_working_date: null,
-  reason: '',
-  reason_details: '',
+  notes: '',
+  supervisorStatus: 'pending',
+  supervisor_approved_at: null,
+  hrStatus: 'pending',
+  hr_manager_approved_at: null,
 })
 
-async function handleSubmit() {
-  if (!form.resignation_date) return message.warning('Resignation date is required')
-  if (!form.last_working_date) return message.warning('Last working date is required')
-  if (!form.reason) return message.warning('Reason is required')
+function resetForm() {
+  Object.assign(form, {
+    resignation_date: null, last_working_date: null, notes: '',
+    supervisorStatus: 'pending', supervisor_approved_at: null,
+    hrStatus: 'pending', hr_manager_approved_at: null,
+  })
+}
 
-  saving.value = true
-  try {
-    await resignationApi.store({
-      employee_id: props.employee.id,
-      ...form,
-    })
-    message.success('Resignation submitted')
+function onAcknowledgementChange(val, dateField) {
+  if (val === 'pending') form[dateField] = null
+}
+
+function validateForm() {
+  if (!form.resignation_date) { message.warning('Resignation date is required'); return false }
+  if (!form.last_working_date) { message.warning('Last working date is required'); return false }
+  return true
+}
+
+async function handleSubmit() {
+  if (!validateForm()) return
+  await submitMain(async () => {
+    await resignationApi.store(buildResignationPayload(form, props.employee.id))
+    message.success('Resignation saved')
     emit('update:open', false)
-    emit('submitted')
-  } catch (err) {
-    const resp = err.response?.data
-    if (resp?.errors) {
-      const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
-    } else {
-      message.error(resp?.message || 'Failed to submit resignation')
-    }
-  }
-  saving.value = false
+  })
+}
+
+async function handleSubmitAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await resignationApi.store(buildResignationPayload(form, props.employee.id))
+    message.success('Resignation saved')
+  })
 }
 </script>
 
 <style scoped>
 .modal-form { margin-top: 16px; }
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-light);
-}
+.approval-hint { font-size: 12px; color: var(--color-text-muted); margin-bottom: 12px; margin-top: -8px; }
 </style>

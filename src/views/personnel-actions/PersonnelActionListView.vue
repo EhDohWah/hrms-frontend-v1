@@ -40,6 +40,9 @@
             {{ label }}
           </a-select-option>
         </a-select>
+        <a-button v-if="selectedRowKeys.length > 0 && canDelete" danger @click="handleBulkDelete">
+          Delete {{ selectedRowKeys.length }} Selected
+        </a-button>
         <a-button v-if="canCreate" type="primary" @click="openCreate">
           <PlusOutlined /> New Action
         </a-button>
@@ -53,6 +56,7 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
+        :row-selection="canDelete ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
         @change="handleTableChange"
         :scroll="{ x: 'max-content' }"
         size="middle"
@@ -96,7 +100,9 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button size="small" type="link" @click="openDetail(record)">View</a-button>
+              <a-button size="small" type="link" @click="openPdfPreview(record)">
+                <EyeOutlined /> View
+              </a-button>
               <a-button
                 v-if="canUpdate"
                 size="small"
@@ -120,12 +126,11 @@
     <a-modal
       v-model:open="formModalVisible"
       :title="editingItem ? 'Edit Personnel Action' : 'Personnel Action Form'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 800px)'"
       destroy-on-close
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <!-- Employee Search -->
         <a-form-item label="Employee" required>
           <a-select
@@ -334,110 +339,62 @@
           </div>
         </div>
 
+        <div class="modal-footer">
+          <a-button @click="formModalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
 
-    <!-- Detail / Approval Modal -->
+    <!-- PDF Preview Modal -->
     <a-modal
-      v-model:open="detailModalVisible"
-      title="Personnel Action Details"
+      v-model:open="pdfPreviewVisible"
       :footer="null"
-      :width="'min(95vw, 720px)'"
+      :width="'min(95vw, 900px)'"
+      :body-style="{ padding: 0 }"
       destroy-on-close
+      centered
+      wrap-class-name="pdf-preview-modal"
     >
-      <template v-if="detailItem">
-        <a-descriptions :column="2" bordered size="small" class="detail-descriptions">
-          <a-descriptions-item label="Reference">
-            <span class="font-mono">{{ detailItem.reference_number }}</span>
-          </a-descriptions-item>
-          <a-descriptions-item label="Status">
-            <a-tag :color="statusColor(detailItem.status)">
-              {{ constants.statuses?.[detailItem.status] || detailItem.status }}
-            </a-tag>
-          </a-descriptions-item>
-          <a-descriptions-item label="Employee">
-            {{ employeeName(detailItem) }}
-          </a-descriptions-item>
-          <a-descriptions-item label="Staff ID">
-            <span class="font-mono">{{ detailItem.employment?.employee?.staff_id || '—' }}</span>
-          </a-descriptions-item>
-          <a-descriptions-item label="Action Type">
-            {{ constants.action_types?.[detailItem.action_type] || detailItem.action_type }}
-          </a-descriptions-item>
-          <a-descriptions-item label="Subtype">
-            {{ constants.action_subtypes?.[detailItem.action_subtype] || detailItem.action_subtype || '—' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="Effective Date">
-            {{ formatDate(detailItem.effective_date) }}
-          </a-descriptions-item>
-          <a-descriptions-item label="Acknowledged By">
-            {{ detailItem.acknowledged_by || '—' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="Transfer Subtype" v-if="detailItem.action_type === 'transfer'">
-            {{ constants.action_subtypes?.[detailItem.action_subtype] || '—' }}
-          </a-descriptions-item>
-        </a-descriptions>
-
-        <!-- Current vs New comparison -->
-        <a-divider orientation="left" style="font-size: 13px; margin: 16px 0 12px">Changes</a-divider>
-        <a-table
-          :columns="changeColumns"
-          :data-source="changeRows"
-          :pagination="false"
-          size="small"
-          :row-key="(r) => r.field"
-        >
-          <template #bodyCell="{ column, record: row }">
-            <template v-if="column.key === 'current'">
-              <span class="change-current">{{ row.current }}</span>
-            </template>
-            <template v-else-if="column.key === 'new'">
-              <span :class="{ 'change-new': row.current !== row.new }">{{ row.new }}</span>
-            </template>
-          </template>
-        </a-table>
-
-        <!-- Comments -->
-        <div v-if="detailItem.comments" class="detail-comments">
-          <strong>Comments:</strong>
-          <p>{{ detailItem.comments }}</p>
-        </div>
-
-        <!-- Approvals Section -->
-        <a-divider orientation="left" style="font-size: 13px; margin: 16px 0 12px">Approvals</a-divider>
-        <div class="approval-grid">
-          <div v-for="a in approvalFields" :key="a.key" class="approval-item">
-            <span class="approval-label">{{ a.label }}</span>
-            <span v-if="a.labelTh" class="approval-label-th">{{ a.labelTh }}</span>
-            <a-switch
-              :checked="detailItem[a.key]"
-              :disabled="!!detailItem.implemented_at || !canUpdate"
-              :loading="approvingKey === a.key"
-              checked-children="Yes"
-              un-checked-children="No"
-              @change="(val) => handleApproval(a, val)"
-            />
-            <span v-if="detailItem[a.dateKey]" class="approval-date">
-              {{ formatDate(detailItem[a.dateKey]) }}
+      <div class="pdf-viewer">
+        <div class="pdf-toolbar">
+          <div class="pdf-toolbar-info">
+            <strong>{{ detailItem?.reference_number || 'Personnel Action' }}</strong>
+            <span v-if="detailItem" style="margin-left: 8px; color: var(--color-text-muted);">
+              {{ employeeName(detailItem) }}
             </span>
           </div>
+          <div class="pdf-toolbar-actions">
+            <a-button type="primary" size="small" :loading="exportingPdf" @click="handleDownloadPdf">
+              <DownloadOutlined /> PA Form
+            </a-button>
+            <a-button size="small" :loading="exportingAmendment" @click="handleDownloadAmendment">
+              <DownloadOutlined /> Amendment
+            </a-button>
+            <a-button size="small" @click="pdfPreviewVisible = false">Close</a-button>
+          </div>
         </div>
-
-        <div v-if="detailItem.implemented_at" class="implemented-banner">
-          Applied on {{ formatDate(detailItem.implemented_at) }}
+        <div class="pdf-frame-wrap">
+          <div v-if="pdfLoading" class="pdf-loading">
+            <a-spin tip="Loading PDF..." />
+          </div>
+          <iframe v-else-if="pdfUrl" :src="pdfUrl" class="pdf-iframe" />
+          <a-empty v-else description="Failed to load PDF" style="padding: 40px 0;" />
         </div>
-      </template>
+      </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onBeforeUnmount, createVNode } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined, FilePdfOutlined, EyeOutlined, DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { personnelActionApi, employeeApi, employmentApi, optionsApi } from '@/api'
 import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters'
 import { cleanParams } from '@/utils/helpers'
@@ -450,7 +407,10 @@ const getSignal = useAbortController()
 // ======================== State ========================
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+  onError: (err) => showApiError(err, 'Failed to save personnel action'),
+})
 const search = ref('')
 const filters = reactive({ action_type: undefined, status: undefined })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -504,10 +464,16 @@ const form = reactive({
   accountant_approved_date: null,
 })
 
-// Detail modal
-const detailModalVisible = ref(false)
+// Selection
+const selectedRowKeys = ref([])
+
+// PDF preview modal
+const pdfPreviewVisible = ref(false)
+const pdfLoading = ref(false)
+const pdfUrl = ref(null)
 const detailItem = ref(null)
-const approvingKey = ref(null)
+const exportingPdf = ref(false)
+const exportingAmendment = ref(false)
 
 // ======================== Constants ========================
 const approvalFields = [
@@ -864,19 +830,21 @@ function onDepartmentChange() {
   form.new_section_department_id = undefined
 }
 
+function validateForm() {
+  if (!form.employment_id) { message.warning('Please select an employee first'); return false }
+  if (!form.action_type) { message.warning('Action type is required'); return false }
+  if (!form.effective_date) { message.warning('Effective date is required'); return false }
+  if (form.action_type === 'transfer' && !form.action_subtype) { message.warning('Transfer subtype is required'); return false }
+  if (form.action_type === 'transfer' && !form.new_department_id && !form.new_site_id) { message.warning('Department or site is required for transfers'); return false }
+  if (['promotion', 'demotion'].includes(form.action_type) && !form.new_position_id) { message.warning('New position is required for this action type'); return false }
+  if (['fiscal_increment', 're_evaluated_pay'].includes(form.action_type) && !form.new_salary) { message.warning('New salary is required for salary adjustments'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.employment_id) return message.warning('Please select an employee first')
-  if (!form.action_type) return message.warning('Action type is required')
-  if (!form.effective_date) return message.warning('Effective date is required')
-  if (form.action_type === 'transfer' && !form.action_subtype) return message.warning('Transfer subtype is required')
-  if (form.action_type === 'transfer' && !form.new_department_id && !form.new_site_id) return message.warning('Department or site is required for transfers')
-  if (['promotion', 'demotion'].includes(form.action_type) && !form.new_position_id) return message.warning('New position is required for this action type')
-  if (['fiscal_increment', 're_evaluated_pay'].includes(form.action_type) && !form.new_salary) return message.warning('New salary is required for salary adjustments')
-
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     const payload = cleanParams({ ...form })
-
     if (editingItem.value) {
       await personnelActionApi.update(editingItem.value.id, payload)
       message.success('Personnel action updated')
@@ -885,36 +853,80 @@ async function handleSave() {
       message.success('Personnel action created')
     }
     formModalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    showApiError(err, 'Failed to save personnel action')
-  }
-  saving.value = false
+  })
 }
 
-// ======================== Detail & Approval ========================
-function openDetail(record) {
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await personnelActionApi.store(cleanParams({ ...form }))
+    message.success('Personnel action created — ready for next entry')
+  })
+}
+
+// ======================== PDF Preview ========================
+async function openPdfPreview(record) {
   detailItem.value = { ...record }
-  detailModalVisible.value = true
+  pdfUrl.value = null
+  pdfLoading.value = true
+  pdfPreviewVisible.value = true
+  try {
+    const { data } = await personnelActionApi.exportPdf(record.id)
+    pdfUrl.value = window.URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
+  } catch {
+    message.error('Failed to load PDF')
+  }
+  pdfLoading.value = false
 }
 
-async function handleApproval(field, approved) {
-  approvingKey.value = field.key
-  try {
-    const { data } = await personnelActionApi.approve(detailItem.value.id, {
-      approval_type: field.type,
-      approved,
-    })
-    const updated = data.data || data
-    detailItem.value = updated
-    // Also update in list
-    const idx = items.value.findIndex((i) => i.id === updated.id)
-    if (idx > -1) items.value[idx] = updated
-    message.success(`${field.label} approval updated`)
-  } catch (err) {
-    showApiError(err, 'Failed to update approval')
+function closePdfPreview() {
+  if (pdfUrl.value) {
+    window.URL.revokeObjectURL(pdfUrl.value)
+    pdfUrl.value = null
   }
-  approvingKey.value = null
+  detailItem.value = null
+}
+
+watch(pdfPreviewVisible, (val) => {
+  if (!val) closePdfPreview()
+})
+
+onBeforeUnmount(() => {
+  if (pdfUrl.value) window.URL.revokeObjectURL(pdfUrl.value)
+})
+
+async function handleDownloadPdf() {
+  if (!detailItem.value?.id) return
+  exportingPdf.value = true
+  try {
+    const { data } = await personnelActionApi.exportPdf(detailItem.value.id)
+    const url = window.URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `personnel-action-${detailItem.value.reference_number || detailItem.value.id}.pdf`
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    showApiError(err, 'Failed to export PDF')
+  }
+  exportingPdf.value = false
+}
+
+async function handleDownloadAmendment() {
+  if (!detailItem.value?.id) return
+  exportingAmendment.value = true
+  try {
+    const { data } = await personnelActionApi.amendmentLetter(detailItem.value.id)
+    const url = window.URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `amendment-contract-${detailItem.value.reference_number || detailItem.value.id}.pdf`
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    showApiError(err, 'Failed to generate amendment letter')
+  }
+  exportingAmendment.value = false
 }
 
 // ======================== Delete ========================
@@ -927,9 +939,32 @@ function handleDelete(record) {
       try {
         await personnelActionApi.destroy(record.id)
         message.success('Personnel action deleted')
+        selectedRowKeys.value = []
         fetchItems()
       } catch (err) {
         showApiError(err, 'Failed to delete')
+      }
+    },
+  })
+}
+
+function handleBulkDelete() {
+  Modal.confirm({
+    title: 'Delete Selected Records',
+    icon: createVNode(ExclamationCircleOutlined),
+    content: `Are you sure you want to delete ${selectedRowKeys.value.length} selected record(s)? This action cannot be undone.`,
+    okText: 'Delete',
+    okType: 'danger',
+    cancelText: 'Cancel',
+    centered: true,
+    async onOk() {
+      try {
+        await personnelActionApi.destroyBatch(selectedRowKeys.value)
+        message.success(`${selectedRowKeys.value.length} record(s) deleted successfully`)
+        selectedRowKeys.value = []
+        fetchItems()
+      } catch (err) {
+        showApiError(err, 'Failed to delete records')
       }
     },
   })
@@ -1086,15 +1121,58 @@ onUnmounted(() => {
   font-family: 'SF Mono', 'Consolas', monospace;
 }
 
-.implemented-banner {
-  margin-top: 16px;
+/* PDF Preview */
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 78vh;
+}
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 16px;
-  background: var(--color-bg-subtle, #f9fafb);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  text-align: center;
+  border-bottom: 1px solid var(--color-border-light, #eee);
+  background: var(--color-bg-surface, #fff);
+}
+.pdf-toolbar-info {
+  font-size: 14px;
+}
+.pdf-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+.pdf-frame-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.pdf-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+</style>
+
+<style>
+/* Unscoped: override Ant modal chrome for PDF preview */
+.pdf-preview-modal .ant-modal-content {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.pdf-preview-modal .ant-modal-body {
+  padding: 0 !important;
+}
+.pdf-preview-modal .ant-modal-header {
+  display: none !important;
+}
+.pdf-preview-modal .ant-modal-close {
+  display: none !important;
 }
 </style>

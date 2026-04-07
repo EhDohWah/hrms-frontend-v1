@@ -23,8 +23,11 @@
           <a-descriptions-item label="Department">
             {{ firstPayroll.display?.department }}
           </a-descriptions-item>
-          <a-descriptions-item label="Position">
-            {{ firstPayroll.display?.position }}
+          <a-descriptions-item label="Actual Position">
+            {{ firstPayroll.display?.position || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="Grant Position">
+            {{ firstPayroll.display?.grant_position || '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="Pay Period">
             {{ formatDate(firstPayroll.pay_period_date) }}

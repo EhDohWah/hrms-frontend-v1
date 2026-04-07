@@ -8,15 +8,19 @@
             <div class="avatar-wrapper">
               <a-avatar
                 :size="80"
-                :src="profilePictureUrl"
-                :style="!profilePictureUrl ? { backgroundColor: 'var(--color-primary)', fontSize: '28px', fontWeight: 700 } : {}"
+                :src="avatarPreview || profilePictureUrl"
+                :style="!profilePictureUrl && !avatarPreview ? { backgroundColor: 'var(--color-primary)', fontSize: '28px', fontWeight: 700 } : {}"
               >
-                {{ !profilePictureUrl ? userInitials : '' }}
+                {{ !profilePictureUrl && !avatarPreview ? userInitials : '' }}
               </a-avatar>
-              <label class="avatar-upload" title="Upload photo">
+              <label v-if="!avatarPreview" class="avatar-upload" title="Upload photo">
                 <CameraOutlined />
-                <input type="file" accept="image/*" @change="handleProfileUpload" hidden />
+                <input ref="fileInputRef" type="file" accept="image/*" @change="handleFileSelect" hidden />
               </label>
+            </div>
+            <div v-if="avatarPreview" class="avatar-preview-actions">
+              <a-button size="small" type="primary" :loading="avatarUploading" @click="confirmAvatarUpload">Upload</a-button>
+              <a-button size="small" @click="cancelAvatarPreview">Cancel</a-button>
             </div>
           </div>
 
@@ -33,10 +37,14 @@
           <div v-if="authStore.user" class="profile-timestamps">
             <div v-if="authStore.user.last_login_at" class="timestamp-item">
               <span class="meta-label">Last Login</span>
-              <span class="meta-value">{{ formatDate(authStore.user.last_login_at) }}</span>
+              <span class="meta-value">{{ formatDateTime(authStore.user.last_login_at) }}</span>
+            </div>
+            <div v-if="authStore.user.last_login_ip" class="timestamp-item">
+              <span class="meta-label">Login IP</span>
+              <span class="meta-value meta-value--mono">{{ authStore.user.last_login_ip }}</span>
             </div>
             <div v-if="authStore.user.created_at" class="timestamp-item">
-              <span class="meta-label">Created</span>
+              <span class="meta-label">Member Since</span>
               <span class="meta-value">{{ formatDate(authStore.user.created_at) }}</span>
             </div>
           </div>
@@ -88,18 +96,18 @@
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="8">
-                <a-form-item label="New Password" name="new_password">
+                <a-form-item label="New Password" name="new_password" :rules="[{ required: true, message: 'Enter a new password' }, { validator: pwValidatePassword }]">
                   <a-input-password v-model:value="passwordForm.new_password" placeholder="New password" />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="8">
-                <a-form-item label="Confirm New Password" name="confirm_password">
+                <a-form-item label="Confirm New Password" name="confirm_password" :rules="[{ required: true, message: 'Confirm your new password' }, { validator: pwValidateMatch }]">
                   <a-input-password v-model:value="passwordForm.confirm_password" placeholder="Confirm new password" />
                 </a-form-item>
               </a-col>
             </a-row>
-            <p class="password-hint">Must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&).</p>
-            <a-button type="primary" html-type="submit" :loading="passwordLoading">
+            <PasswordRequirements :password="passwordForm.new_password" />
+            <a-button type="primary" html-type="submit" :loading="passwordLoading" :disabled="!pwAllMet || !passwordForm.confirm_password">
               Update Password
             </a-button>
           </a-form>
@@ -116,6 +124,15 @@
               </div>
             </div>
           </template>
+
+          <p class="permissions-hint">
+            <template v-if="isSystemRole">
+              Permissions are automatically assigned based on your role and cannot be edited.
+            </template>
+            <template v-else>
+              Permissions are managed by your administrator.
+            </template>
+          </p>
 
           <div v-if="Object.keys(groupedPermissions).length">
             <!-- Desktop: grouped table -->
@@ -191,7 +208,9 @@ import { CameraOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-desig
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { userApi } from '@/api'
-import { formatDate } from '@/utils/formatters'
+import { formatDate, formatDateTime } from '@/utils/formatters'
+import { usePasswordStrength } from '@/composables/usePasswordStrength'
+import PasswordRequirements from '@/components/common/PasswordRequirements.vue'
 
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'http://localhost:8000'
 const appStore = useAppStore()
@@ -220,6 +239,7 @@ const isProfileDirty = computed(() => {
 // ---- Password form ----
 const passwordForm = reactive({ current_password: '', new_password: '', confirm_password: '' })
 const passwordLoading = ref(false)
+const { allMet: pwAllMet, validatePassword: pwValidatePassword, validateMatch: pwValidateMatch } = usePasswordStrength(() => passwordForm.new_password)
 
 // ---- Computed ----
 const userInitials = computed(() => {
@@ -244,6 +264,10 @@ const groupedPermissions = computed(() => {
   }
   return groups
 })
+
+const isSystemRole = computed(() =>
+  authStore.hasRole('admin') || authStore.hasRole('hr-manager')
+)
 
 const permissionSummary = computed(() => {
   const allPerms = Object.values(groupedPermissions.value).flat()
@@ -304,17 +328,12 @@ async function handleProfileSave() {
 
 // ---- Password change ----
 async function handlePasswordChange() {
-  if (!passwordForm.current_password || !passwordForm.new_password) {
-    message.warning('Please fill in all password fields')
-    return
-  }
-  if (passwordForm.new_password !== passwordForm.confirm_password) {
-    message.error('New passwords do not match')
-    return
-  }
   passwordLoading.value = true
   try {
     await userApi.updatePassword(passwordForm)
+    // Mark password as changed so the warning modal closes
+    authStore.updateUserFromEvent({ password_changed_at: new Date().toISOString() })
+    authStore.broadcastProfileUpdate({ password_changed_at: new Date().toISOString() })
     message.success('Password updated successfully')
     Object.assign(passwordForm, { current_password: '', new_password: '', confirm_password: '' })
   } catch (err) {
@@ -330,21 +349,42 @@ async function handlePasswordChange() {
   }
 }
 
-// ---- Profile picture upload ----
-async function handleProfileUpload(event) {
+// ---- Profile picture upload with preview ----
+const fileInputRef = ref(null)
+const avatarPreview = ref(null)
+const avatarFile = ref(null)
+const avatarUploading = ref(false)
+
+function handleFileSelect(event) {
   const file = event.target.files?.[0]
   if (!file) return
   if (!file.type.startsWith('image/')) {
     message.warning('Please select an image file')
+    event.target.value = ''
     return
   }
   if (file.size > 2 * 1024 * 1024) {
     message.warning('Image must be under 2MB')
+    event.target.value = ''
     return
   }
+  avatarFile.value = file
+  const reader = new FileReader()
+  reader.onload = (e) => { avatarPreview.value = e.target.result }
+  reader.readAsDataURL(file)
+}
 
+function cancelAvatarPreview() {
+  avatarPreview.value = null
+  avatarFile.value = null
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+async function confirmAvatarUpload() {
+  if (!avatarFile.value) return
+  avatarUploading.value = true
   const formData = new FormData()
-  formData.append('profile_picture', file)
+  formData.append('profile_picture', avatarFile.value)
   try {
     const { data } = await userApi.updateProfilePicture(formData)
     const updates = {
@@ -355,8 +395,10 @@ async function handleProfileUpload(event) {
     message.success('Profile picture updated')
   } catch (err) {
     message.error(err.response?.data?.message || 'Failed to upload picture')
+  } finally {
+    avatarUploading.value = false
+    cancelAvatarPreview()
   }
-  event.target.value = ''
 }
 
 onMounted(() => appStore.setPageMeta('My Profile'))
@@ -413,6 +455,13 @@ onMounted(() => appStore.setPageMeta('My Profile'))
   color: var(--color-text);
 }
 
+.avatar-preview-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
 .profile-name {
   font-size: 18px;
   font-weight: 600;
@@ -455,6 +504,10 @@ onMounted(() => appStore.setPageMeta('My Profile'))
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text);
+}
+.meta-value--mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
 }
 
 /* Main content */
@@ -594,10 +647,10 @@ onMounted(() => appStore.setPageMeta('My Profile'))
   color: var(--color-border);
 }
 
-.password-hint {
+.permissions-hint {
   font-size: 12px;
   color: var(--color-text-muted);
-  margin: -8px 0 12px;
+  margin: 0 0 16px;
 }
 
 </style>

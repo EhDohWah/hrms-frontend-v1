@@ -101,6 +101,7 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
+              <a-button size="small" type="link" @click="openView(record)">View</a-button>
               <a-button v-if="authStore.canUpdate('employee_training')" size="small" type="link" @click="openEdit(record)">Edit</a-button>
               <a-button v-if="authStore.canDelete('employee_training')" size="small" type="link" danger @click="handleDelete(record)">Remove</a-button>
             </a-space>
@@ -113,11 +114,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Enrollment' : 'Enroll Employee'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 520px)'"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Employee" required>
           <a-select
             v-model:value="form.employee_id"
@@ -157,7 +157,44 @@
             <a-select-option v-for="s in ENROLLMENT_STATUSES" :key="s.value" :value="s.value">{{ s.label }}</a-select-option>
           </a-select>
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Enroll' }}</a-button>
+        </div>
       </a-form>
+    </a-modal>
+
+    <!-- Record View Modal -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      :footer="null"
+      :width="'min(95vw, 920px)'"
+      :body-style="{ padding: 0, background: 'transparent' }"
+      :closable="false"
+      :mask-closable="true"
+      wrap-class-name="record-view-modal"
+      centered
+    >
+      <div v-if="viewLoading" class="view-loading-state">
+        <a-spin tip="Loading record..." />
+      </div>
+      <div v-else-if="viewRecord" class="view-modal-wrap">
+        <button class="view-close-btn" @click="viewModalVisible = false" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+        <RecordView
+          :title="viewEmployeeName"
+          icon="certificate"
+          badge="Employee Training"
+          :status="viewStatusKey"
+          :status-label="viewRecord.status || 'Unknown'"
+          :status-meta="viewStatusMeta"
+          :sections="viewSections"
+          @print="handleViewPrint"
+          @edit="openEditFromView"
+        />
+      </div>
     </a-modal>
   </div>
 </template>
@@ -170,11 +207,13 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeTrainingApi, employeeApi, trainingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
-import { formatDate, genderLabel } from '@/utils/formatters'
+import { useSaveAnother } from '@/composables/useSaveAnother'
+import { formatDate, formatDateTime, genderLabel } from '@/utils/formatters'
 import { cleanParams } from '@/utils/helpers'
 import { PAGINATION_DEFAULTS } from '@/constants/config'
 import { ENROLLMENT_STATUSES, getEnrollmentStatusColor } from '@/constants/training'
 import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
+import RecordView from '@/components/common/RecordView.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -182,7 +221,9 @@ const getSignal = useAbortController()
 
 const items = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const currentYear = new Date().getFullYear()
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i)
 const trainingDropdownOptions = ref([])
@@ -221,7 +262,7 @@ const columns = [
   { title: 'Organizer', dataIndex: ['training', 'organizer'], width: 160 },
   { title: 'Period', key: 'period', width: 240 },
   { title: 'Status', key: 'status', width: 110, align: 'center' },
-  { title: '', key: 'actions', width: 140, align: 'right' },
+  { title: '', key: 'actions', width: 180, align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -266,7 +307,7 @@ function handleTableChange(pag) {
   fetchItems()
 }
 
-// ---- Employee search ----
+// ── Employee search ──
 function handleEmployeeSearch(val) {
   if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
   if (!val || val.length < 2) {
@@ -283,7 +324,7 @@ function handleEmployeeSearch(val) {
   }, 300)
 }
 
-// ---- Training search ----
+// ── Training search ──
 function handleTrainingSearch(val) {
   if (trainingSearchTimer) clearTimeout(trainingSearchTimer)
   if (!val || val.length < 2) {
@@ -337,12 +378,16 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.employee_id) { message.warning('Please select an employee'); return false }
+  if (!form.training_id) { message.warning('Please select a training'); return false }
+  if (!form.status) { message.warning('Status is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.employee_id) return message.warning('Please select an employee')
-  if (!form.training_id) return message.warning('Please select a training')
-  if (!form.status) return message.warning('Status is required')
-  saving.value = true
-  try {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
       await employeeTrainingApi.update(editingItem.value.id, { status: form.status })
       message.success('Enrollment updated')
@@ -351,12 +396,15 @@ async function handleSave() {
       message.success('Employee enrolled')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save enrollment')
-  } finally {
-    saving.value = false
-  }
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await employeeTrainingApi.store(cleanParams({ ...form }))
+    message.success('Employee enrolled — ready for next entry')
+  })
 }
 
 function handleDelete(record) {
@@ -407,6 +455,110 @@ async function fetchTrainingDropdownOptions() {
   } catch { /* ignore */ }
 }
 
+// ── Record View Modal ────────────────────────────────────────────────────────
+
+const viewModalVisible = ref(false)
+const viewLoading = ref(false)
+const viewRecord = ref(null)
+
+const viewEmployeeName = computed(() => {
+  const r = viewRecord.value
+  if (!r?.employee) return '—'
+  return `${r.employee.first_name_en || ''} ${r.employee.last_name_en || ''}`.trim()
+})
+
+const viewStatusKey = computed(() => {
+  const s = viewRecord.value?.status?.toLowerCase()
+  const map = { completed: 'active', 'in progress': 'ending-soon', pending: 'ending-soon' }
+  return map[s] || 'active'
+})
+
+const viewStatusMeta = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const meta = []
+  if (r.employee?.staff_id) meta.push({ icon: 'id', text: r.employee.staff_id })
+  if (r.employee?.organization) meta.push({ icon: 'building', text: r.employee.organization })
+  if (r.training?.title) meta.push({ icon: 'school', text: r.training.title })
+  if (r.training?.start_date && r.training?.end_date) {
+    meta.push({ icon: 'calendar', text: `${formatDate(r.training.start_date)} → ${formatDate(r.training.end_date)}` })
+  }
+  return meta
+})
+
+const viewSections = computed(() => {
+  const r = viewRecord.value
+  if (!r) return []
+  const sections = []
+
+  if (r.employee) {
+    const emp = r.employee
+    const initials = `${(emp.first_name_en || '')[0] || ''}${(emp.last_name_en || '')[0] || ''}`.toUpperCase()
+    sections.push({
+      title: 'Employee', icon: 'user', type: 'avatar_fields',
+      initials,
+      name: `${emp.first_name_en || ''} ${emp.last_name_en || ''}`.trim(),
+      subtitle: emp.staff_id,
+      fields: [
+        { label: 'Staff ID', value: emp.staff_id, mono: true },
+        { label: 'Organization', value: emp.organization },
+        { label: 'Gender', value: genderLabel(emp.gender) },
+      ],
+    })
+  }
+
+  if (r.training) {
+    sections.push({
+      title: 'Training Details', icon: 'school', type: 'fields',
+      fields: [
+        { label: 'Title', value: r.training.title },
+        { label: 'Organizer', value: r.training.organizer },
+        { label: 'Start Date', value: formatDate(r.training.start_date), mono: true },
+        { label: 'End Date', value: formatDate(r.training.end_date), mono: true },
+      ],
+    })
+  }
+
+  sections.push({
+    title: 'Enrollment', icon: 'clipboard-check', type: 'fields',
+    fields: [
+      { label: 'Status', value: r.status },
+      { label: 'Enrolled On', value: formatDateTime(r.created_at), mono: true },
+      { label: 'Last Updated', value: formatDateTime(r.updated_at), mono: true },
+    ],
+  })
+
+  return sections
+})
+
+async function openView(record) {
+  viewRecord.value = null
+  viewModalVisible.value = true
+  viewLoading.value = true
+  try {
+    const { data } = await employeeTrainingApi.show(record.id)
+    viewRecord.value = data.data || data
+  } catch {
+    message.error('Failed to load enrollment details')
+    viewModalVisible.value = false
+  } finally {
+    viewLoading.value = false
+  }
+}
+
+function handleViewPrint() {
+  window.print()
+}
+
+function openEditFromView() {
+  const id = viewRecord.value?.id
+  viewModalVisible.value = false
+  if (id) {
+    const record = items.value.find(i => i.id === id)
+    if (record) openEdit(record)
+  }
+}
+
 onMounted(() => {
   appStore.setPageMeta('Employee Training')
   fetchItems()
@@ -442,4 +594,18 @@ onUnmounted(() => {
 .cell-link { text-decoration: none; color: inherit; }
 .cell-name { font-weight: 600; font-size: 14px; }
 .modal-form { margin-top: 16px; }
+
+/* ── Record View Modal ── */
+.view-loading-state { display: flex; justify-content: center; align-items: center; padding: 64px 0; }
+.view-modal-wrap { position: relative; max-width: 880px; margin: 0 auto; }
+.view-close-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 34px; height: 34px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.18); backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.9); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-base);
+}
+.view-close-btn:hover { background: rgba(255,255,255,0.35); color: #fff; transform: scale(1.08); }
+.view-close-btn:focus-visible { outline: 2px solid rgba(255,255,255,0.6); outline-offset: 2px; }
 </style>

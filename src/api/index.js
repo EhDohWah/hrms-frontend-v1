@@ -29,3 +29,4 @@ export { employeeEducationApi, employeeChildApi, employeeLanguageApi, employeeBe
 export { reportApi } from './reportApi'
 export { adminApi } from './adminApi'
 export { activityLogApi } from './activityLogApi'
+export { systemApi } from './systemApi'

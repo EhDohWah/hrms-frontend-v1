@@ -13,6 +13,7 @@
         <router-view />
       </a-layout-content>
     </a-layout>
+    <PasswordChangeWarningModal v-if="authStore.needsPasswordChange" />
   </a-layout>
 </template>
 
@@ -24,6 +25,7 @@ import { useNotificationStore } from '@/stores/notifications'
 import { subscribeUserChannels, destroyEcho } from '@/plugins/echo'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import PasswordChangeWarningModal from '@/components/layout/PasswordChangeWarningModal.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()

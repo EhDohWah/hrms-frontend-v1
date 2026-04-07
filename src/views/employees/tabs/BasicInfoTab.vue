@@ -15,7 +15,7 @@
         </a-col>
         <a-col :span="9">
           <a-form-item label="Staff ID" required>
-            <a-input v-model:value="form.staff_id" placeholder="e.g. 0101" />
+            <a-input v-model:value="form.staff_id" placeholder="e.g. 0101" @blur="$emit('staff-id-blur')" />
           </a-form-item>
         </a-col>
         <a-col :span="9">
@@ -51,7 +51,7 @@
         </a-col>
         <a-col :span="9">
           <a-form-item label="Last Name">
-            <a-input v-model:value="form.last_name_en" placeholder="Last name" />
+            <a-input v-model:value="form.last_name_en" placeholder="Last name" @blur="$emit('name-blur')" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -102,6 +102,7 @@
               format="DD/MM/YYYY"
               value-format="YYYY-MM-DD"
               placeholder="DD/MM/YYYY"
+              @blur="$emit('dob-change')"
             />
           </a-form-item>
         </a-col>
@@ -179,6 +180,8 @@
       <div class="info-grid">
         <InfoField label="Gender" :value="genderLabel(form.gender)" />
         <InfoField label="Date of Birth" :value="formatDate(form.date_of_birth)" />
+        <InfoField label="DOB Thai Year (B.E.)" :value="form.date_of_birth ? String(formatThaiYear(form.date_of_birth)) : null" mono />
+        <InfoField label="Age" :value="form.date_of_birth ? `${calcAge(form.date_of_birth)} years` : null" />
         <InfoField label="Marital Status" :value="form.marital_status" />
         <InfoField label="Nationality" :value="form.nationality" />
         <InfoField label="Religion" :value="form.religion" />
@@ -193,12 +196,14 @@ import { ref, computed, onMounted } from 'vue'
 import InfoField from '@/components/common/InfoField.vue'
 import { lookupApi } from '@/api'
 import { ORG_OPTIONS } from '@/constants/organizations'
-import { formatDate, genderLabel } from '@/utils/formatters'
+import { formatDate, genderLabel, calcAge, formatThaiYear } from '@/utils/formatters'
 
 defineProps({
   form: { type: Object, required: true },
   readonly: { type: Boolean, default: false },
 })
+
+defineEmits(['staff-id-blur', 'name-blur', 'dob-change'])
 
 const lookups = ref({
   employee_status: [],

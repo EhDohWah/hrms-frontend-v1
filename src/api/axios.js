@@ -7,75 +7,35 @@ const client = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
   headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-  withCredentials: true, // Send HttpOnly auth cookies automatically
+  withCredentials: true,
+  withXSRFToken: true,
 })
 
-// No request interceptor needed — cookies are sent automatically via withCredentials
+// Separate axios instance for Sanctum CSRF cookie (root domain, no /api/v1 prefix)
+export const csrfClient = axios.create({
+  baseURL: import.meta.env.VITE_APP_URL || 'http://localhost:8000',
+  withCredentials: true,
+})
 
 // ---- Response interceptor: handle 401, 403 ----
-let isRefreshing = false
-let failedQueue = []
-const MAX_QUEUE_SIZE = 10
-
-const processQueue = (error) => {
-  failedQueue.forEach(({ resolve, reject }) => {
-    error ? reject(error) : resolve()
-  })
-  failedQueue = []
-}
-
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config
     const status = error.response?.status
     const errorData = error.response?.data
 
     // --- 401: Unauthorized ---
     if (status === 401) {
-      // Login-specific errors: don't refresh, throw immediately
-      const loginErrors = ['EMAIL_NOT_FOUND', 'INVALID_PASSWORD', 'ACCOUNT_INACTIVE']
+      // Login-specific errors: don't redirect, throw immediately
+      const loginErrors = ['INVALID_CREDENTIALS', 'ACCOUNT_INACTIVE', 'RATE_LIMIT_ERROR', 'SESSION_CONFLICT']
       if (loginErrors.includes(errorData?.error_type)) {
         return Promise.reject(error)
       }
 
-      // Auth requests (login, logout, refresh) — don't attempt token refresh, just expire
-      const isAuthRequest = ['/login', '/logout', '/refresh-token'].some(
-        path => originalRequest.url?.includes(path)
-      )
-      if (isAuthRequest) {
-        clearAuthData()
-        router.push({ name: 'login' })
-        return Promise.reject(error)
-      }
-
-      // Session expired: try refresh
-      if (!originalRequest._retry) {
-        if (isRefreshing) {
-          if (failedQueue.length >= MAX_QUEUE_SIZE) {
-            return Promise.reject(error)
-          }
-          return new Promise((resolve, reject) => {
-            failedQueue.push({ resolve, reject })
-          }).then(() => client(originalRequest))
-        }
-
-        originalRequest._retry = true
-        isRefreshing = true
-
-        try {
-          await client.post('/refresh-token')
-          processQueue(null)
-          return client(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError)
-          clearAuthData()
-          router.push({ name: 'login' })
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      }
+      // Session expired — clear local state and redirect to login
+      clearAuthData()
+      router.push({ name: 'login' })
+      return Promise.reject(error)
     }
 
     // --- 409: Session conflict (let LoginView handle it) ---
@@ -98,7 +58,6 @@ function clearAuthData() {
   localStorage.removeItem('user')
   localStorage.removeItem('userRole')
   localStorage.removeItem('permissions')
-  localStorage.removeItem('tokenExpiration')
   localStorage.removeItem('justLoggedIn')
 
   // Sync Pinia store reactive state — without this, auth.isAuthenticated stays

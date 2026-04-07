@@ -42,6 +42,24 @@
       </div>
     </div>
 
+    <!-- Bulk Actions Bar -->
+    <div v-if="selectedRowKeys.length > 0 && authStore.canUpdate('users')" class="bulk-bar">
+      <span class="bulk-count">{{ selectedRowKeys.length }} selected</span>
+      <a-button size="small" @click="handleBulkStatus('active')">Activate</a-button>
+      <a-button size="small" @click="handleBulkStatus('inactive')">Deactivate</a-button>
+      <a-select
+        placeholder="Assign role..."
+        size="small"
+        style="width: 160px"
+        @change="handleBulkRole"
+      >
+        <a-select-option v-for="r in roleOptions" :key="r.value" :value="r.value">
+          {{ r.label }}
+        </a-select-option>
+      </a-select>
+      <a-button size="small" type="link" @click="selectedRowKeys = []">Clear</a-button>
+    </div>
+
     <a-card :body-style="{ padding: 0 }">
       <a-table
         :columns="columns"
@@ -49,6 +67,7 @@
         :loading="loading"
         :pagination="tablePagination"
         :row-key="(r) => r.id"
+        :row-selection="authStore.canUpdate('users') ? { selectedRowKeys, onChange: onSelectChange } : undefined"
         @change="handleTableChange"
         :scroll="{ x: 'max-content' }"
         size="middle"
@@ -71,7 +90,7 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'last_login_at'">
-            {{ record.last_login_at ? new Date(record.last_login_at).toLocaleDateString() : 'Never' }}
+            {{ record.last_login_at ? formatDate(record.last_login_at) : 'Never' }}
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
@@ -109,11 +128,10 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit User' : 'Add User'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="520"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Full Name" required>
           <a-input v-model:value="form.name" placeholder="Enter full name" />
         </a-form-item>
@@ -121,14 +139,16 @@
           <a-input v-model:value="form.email" placeholder="Enter email address" type="email" />
         </a-form-item>
         <a-form-item v-if="!editingItem" label="Password" required>
-          <a-input-password v-model:value="form.password" placeholder="Min 8 chars, upper, lower, digit, special" />
+          <a-input-password v-model:value="form.password" placeholder="Choose a strong password" />
         </a-form-item>
+        <PasswordRequirements v-if="!editingItem" :password="form.password" />
         <a-form-item v-if="!editingItem" label="Confirm Password" required>
           <a-input-password v-model:value="form.password_confirmation" placeholder="Confirm password" />
         </a-form-item>
         <a-form-item v-if="editingItem" label="New Password (leave blank to keep current)">
           <a-input-password v-model:value="form.password" placeholder="Enter new password" />
         </a-form-item>
+        <PasswordRequirements v-if="editingItem && form.password" :password="form.password" />
         <a-form-item v-if="editingItem && form.password" label="Confirm New Password" required>
           <a-input-password v-model:value="form.password_confirmation" placeholder="Confirm new password" />
         </a-form-item>
@@ -139,6 +159,11 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -151,7 +176,11 @@ import { SearchOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { adminApi } from '@/api'
+import { formatDate } from '@/utils/formatters'
+import PasswordRequirements from '@/components/common/PasswordRequirements.vue'
+import { usePasswordStrength } from '@/composables/usePasswordStrength'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 
 const getSignal = useAbortController()
 const appStore = useAppStore()
@@ -160,7 +189,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const roleOptions = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
 const roleFilter = ref(undefined)
 const statusFilter = ref(undefined)
@@ -174,6 +205,8 @@ const form = reactive({
   password_confirmation: '',
   role: undefined,
 })
+
+const { allMet: pwAllMet } = usePasswordStrength(() => form.password)
 
 watch(() => form.password, (val) => {
   if (!val) form.password_confirmation = ''
@@ -225,6 +258,47 @@ async function fetchRoleOptions() {
   }
 }
 
+// ── Bulk actions ──
+const selectedRowKeys = ref([])
+
+function onSelectChange(keys) {
+  selectedRowKeys.value = keys
+}
+
+async function handleBulkStatus(status) {
+  if (!selectedRowKeys.value.length) return
+  Modal.confirm({
+    title: `${status === 'active' ? 'Activate' : 'Deactivate'} ${selectedRowKeys.value.length} users?`,
+    onOk: async () => {
+      try {
+        await adminApi.bulkStatus({ user_ids: selectedRowKeys.value, status })
+        message.success(`${selectedRowKeys.value.length} users updated`)
+        selectedRowKeys.value = []
+        fetchItems()
+      } catch (err) {
+        message.error(err.response?.data?.message || 'Bulk action failed')
+      }
+    },
+  })
+}
+
+async function handleBulkRole(roleName) {
+  if (!selectedRowKeys.value.length || !roleName) return
+  Modal.confirm({
+    title: `Assign role "${roleName}" to ${selectedRowKeys.value.length} users?`,
+    onOk: async () => {
+      try {
+        await adminApi.bulkRole({ user_ids: selectedRowKeys.value, role: roleName })
+        message.success(`Role assigned to ${selectedRowKeys.value.length} users`)
+        selectedRowKeys.value = []
+        fetchItems()
+      } catch (err) {
+        message.error(err.response?.data?.message || 'Bulk action failed')
+      }
+    },
+  })
+}
+
 function onSearchOrFilterChange() {
   pagination.current_page = 1
   fetchItems()
@@ -258,43 +332,50 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
-async function handleSave() {
-  if (!form.name || !form.email || !form.role) return message.warning('Name, email, and role are required')
-
-  if (!editingItem.value && !form.password) return message.warning('Password is required')
+function validateForm() {
+  if (!form.name || !form.email || !form.role) { message.warning('Name, email, and role are required'); return false }
+  if (!editingItem.value && !form.password) { message.warning('Password is required'); return false }
   if (form.password) {
-    if (!form.password_confirmation) return message.warning('Please confirm the new password')
-    if (form.password !== form.password_confirmation) return message.warning('Passwords do not match')
+    if (!pwAllMet.value) { message.warning('Password does not meet all requirements'); return false }
+    if (!form.password_confirmation) { message.warning('Please confirm the new password'); return false }
+    if (form.password !== form.password_confirmation) { message.warning('Passwords do not match'); return false }
   }
+  return true
+}
 
-  saving.value = true
-  try {
-    const payload = { name: form.name, email: form.email, role: form.role }
-    if (form.password) {
-      payload.password = form.password
-      payload.password_confirmation = form.password_confirmation
-    }
+function buildPayload() {
+  const payload = { name: form.name, email: form.email, role: form.role }
+  if (form.password) {
+    payload.password = form.password
+    payload.password_confirmation = form.password_confirmation
+  }
+  return payload
+}
 
+async function handleSave() {
+  if (!validateForm()) return
+  await submitMain(async () => {
     if (editingItem.value) {
-      await adminApi.update(editingItem.value.id, payload)
+      await adminApi.update(editingItem.value.id, buildPayload())
       message.success('User updated')
-
       // Refresh auth store when editing own account so header/profile update immediately
       if (editingItem.value.id === authStore.user?.id) {
         await Promise.all([authStore.fetchUser(), authStore.fetchPermissions()])
       }
     } else {
-      await adminApi.store(payload)
+      await adminApi.store(buildPayload())
       message.success('User created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    const data = err.response?.data
-    const firstError = data?.errors && Object.values(data.errors).flat()[0]
-    message.error(firstError || data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await adminApi.store(buildPayload())
+    message.success('User created — ready for next entry')
+  })
 }
 
 function handleDelete(record) {
@@ -321,22 +402,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.page-header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-@media (min-width: 640px) {
-  .page-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-.page-header-stats { display: flex; gap: 6px; }
-.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-.modal-form { margin-top: 16px; }
-</style>

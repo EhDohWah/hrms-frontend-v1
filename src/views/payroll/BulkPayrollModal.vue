@@ -59,6 +59,11 @@
         <div class="loading-center"><a-spin size="large" /><p>Calculating payroll for all employees...</p></div>
       </template>
       <template v-else-if="previewData">
+        <!-- Pay period + org context -->
+        <div class="preview-context">
+          <strong>Payroll Preview:</strong> {{ wizardForm.organization }} — {{ formatDate(wizardForm.pay_period_date, 'DD MMM YYYY') }}
+        </div>
+
         <a-alert type="info" show-icon style="margin-bottom: 16px">
           <template #message>
             <strong>{{ previewData.summary?.total_employees || 0 }}</strong> employees &middot;
@@ -70,8 +75,38 @@
           </template>
         </a-alert>
 
+        <!-- Department breakdown -->
+        <a-collapse v-if="departmentBreakdown.length" :bordered="false" style="margin-bottom: 16px; background: transparent">
+          <a-collapse-panel key="dept" :header="`Department Breakdown (${departmentBreakdown.length} departments)`">
+            <a-table
+              :columns="deptBreakdownColumns"
+              :data-source="departmentBreakdown"
+              :row-key="(r) => r.department"
+              :pagination="false"
+              size="small"
+            >
+              <template #bodyCell="{ column, record: dept }">
+                <template v-if="column.dataIndex === 'totalNet'">
+                  <span class="font-mono">{{ formatCurrency(dept.totalNet) }}</span>
+                </template>
+              </template>
+            </a-table>
+          </a-collapse-panel>
+        </a-collapse>
+
+        <!-- Warnings with employee links -->
         <div v-if="previewData.warnings?.length" style="margin-bottom: 12px">
-          <a-alert v-for="(w, i) in previewData.warnings" :key="i" type="warning" :message="w" show-icon style="margin-bottom: 4px" />
+          <a-alert v-for="(w, i) in previewData.warnings" :key="i" type="warning" show-icon style="margin-bottom: 4px">
+            <template #message>
+              <span>{{ w }}</span>
+              <router-link
+                v-if="findEmployeeIdFromWarning(w)"
+                :to="{ name: 'employee-detail', params: { id: findEmployeeIdFromWarning(w) } }"
+                target="_blank"
+                style="margin-left: 8px; font-size: 12px"
+              >View employee</router-link>
+            </template>
+          </a-alert>
         </div>
 
         <div class="preview-toolbar">
@@ -86,6 +121,10 @@
           </a-input>
           <a-button size="small" @click="toggleExpandAll">
             {{ expandedRows.length === filteredPreviewEmployees.length ? 'Collapse All' : 'Expand All' }}
+          </a-button>
+          <a-button size="small" :loading="previewLoading" @click="handlePreview">
+            <template #icon><ReloadOutlined /></template>
+            Refresh Preview
           </a-button>
         </div>
 
@@ -125,6 +164,7 @@
                 :row-key="(r) => r.allocation_id"
                 :pagination="false"
                 size="small"
+                :scroll="{ x: 'max-content' }"
                 class="alloc-sub-table"
               >
                 <template #bodyCell="{ column, record: alloc }">
@@ -133,6 +173,9 @@
                   </template>
                   <template v-else-if="column.key === 'grant_name'">
                     {{ alloc.grant_name }}
+                  </template>
+                  <template v-else-if="column.key === 'grant_position'">
+                    {{ alloc.grant_position }}
                   </template>
                   <template v-else-if="column.key === 'fte'">
                     {{ (alloc.fte * 100).toFixed(0) }}%
@@ -171,6 +214,30 @@
           <a-tag v-if="processStats.failed > 0" color="red">{{ processStats.failed }} failed</a-tag>
           <a-tag v-if="processStats.advances_created > 0" color="blue">{{ processStats.advances_created }} advances</a-tag>
         </div>
+
+        <!-- Failure details on completion -->
+        <template v-if="processStatus === 'completed' && batchErrors.length">
+          <a-alert type="warning" style="margin-top: 16px; max-width: 500px; text-align: left">
+            <template #message>{{ batchErrors.length }} failed payroll{{ batchErrors.length > 1 ? 's' : '' }}</template>
+            <template #description>
+              <div v-for="(err, i) in batchErrors.slice(0, 5)" :key="i" style="font-size: 13px; padding: 2px 0">
+                <strong>{{ err.employee }}</strong> — {{ err.error }}
+              </div>
+              <div v-if="batchErrors.length > 5" style="font-size: 12px; color: var(--color-text-muted); padding-top: 4px">
+                and {{ batchErrors.length - 5 }} more...
+              </div>
+            </template>
+          </a-alert>
+        </template>
+        <a-button
+          v-if="(processStatus === 'completed' || processStatus === 'failed') && processStats.failed > 0"
+          :loading="downloadingErrors"
+          style="margin-top: 12px"
+          @click="handleDownloadErrors"
+        >
+          <template #icon><DownloadOutlined /></template>
+          Download Error Report
+        </a-button>
       </div>
     </div>
 
@@ -201,11 +268,11 @@
 <script setup>
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { SearchOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { payrollApi } from '@/api'
 import { getEcho, initEcho } from '@/plugins/echo'
 import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
-import { formatCurrency } from '@/utils/formatters'
+import { formatCurrency, formatDate } from '@/utils/formatters'
 
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open', 'completed'])
@@ -218,7 +285,7 @@ const steps = [
 ]
 
 const currentStep = ref(0)
-const wizardTitle = computed(() => `Bulk Payroll — ${steps[currentStep.value]?.title || ''}`)
+const wizardTitle = computed(() => `Run Payroll — ${steps[currentStep.value]?.title || ''}`)
 
 const wizardForm = reactive({
   pay_period_date: null,
@@ -244,16 +311,17 @@ let pollInterval = null
 let batchId = null
 
 const statusColorMap = {
+  'Expats (Oxford)': 'blue',
+  'Expats (Local)': 'purple',
   'Local ID Staff': 'green',
   'Local non ID Staff': 'green',
-  'Expats (Local)': 'purple',
 }
 
 const previewColumns = [
   { title: 'Org', key: 'org', width: 70, align: 'center' },
   { title: 'Employee', key: 'employee', width: 180 },
   { title: 'Department', dataIndex: 'department', width: 140, ellipsis: true },
-  { title: 'Position', dataIndex: 'position', width: 140, ellipsis: true },
+  { title: 'Actual Position', dataIndex: 'position', width: 150, ellipsis: true },
   { title: 'Site', dataIndex: 'site', width: 100, ellipsis: true },
   { title: 'Status', key: 'status', width: 140 },
   { title: 'Records', key: 'records', width: 70, align: 'center' },
@@ -265,6 +333,7 @@ const allocColumns = [
   // Grant info
   { title: 'Grant Code', key: 'grant_code', width: 100 },
   { title: 'Grant Name', key: 'grant_name', width: 160, ellipsis: true },
+  { title: 'Position Under Grant', key: 'grant_position', width: 160, ellipsis: true },
   { title: 'FTE', key: 'fte', width: 55, align: 'center' },
   // Income
   { title: 'Gross Salary', key: 'gross_salary', width: 105, align: 'right' },
@@ -292,6 +361,29 @@ const allocColumns = [
   { title: 'Net Salary', key: 'net_salary', width: 105, align: 'right' },
   { title: '', key: 'flags', width: 70 },
 ]
+
+// Department breakdown from preview data
+const departmentBreakdown = computed(() => {
+  const employees = previewData.value?.employees || []
+  const map = {}
+  for (const emp of employees) {
+    const dept = emp.department || 'Unassigned'
+    if (!map[dept]) map[dept] = { department: dept, count: 0, totalNet: 0 }
+    map[dept].count++
+    map[dept].totalNet += (emp.allocations || []).reduce((s, a) => s + (Number(a.net_salary) || 0), 0)
+  }
+  return Object.values(map).sort((a, b) => b.totalNet - a.totalNet)
+})
+
+const deptBreakdownColumns = [
+  { title: 'Department', dataIndex: 'department', ellipsis: true },
+  { title: 'Employees', dataIndex: 'count', width: 90, align: 'center' },
+  { title: 'Total Net', dataIndex: 'totalNet', width: 130, align: 'right' },
+]
+
+// Track batch errors for completion screen
+const batchErrors = ref([])
+const downloadingErrors = ref(false)
 
 const filteredPreviewEmployees = computed(() => {
   const employees = previewData.value?.employees || []
@@ -385,10 +477,12 @@ async function subscribeWebSocket(id) {
         processCurrentEmployee.value = ''
         processCurrentAllocation.value = ''
         cleanupTracking()
+        if (e.stats?.failed > 0) fetchBatchErrors()
       } else if (e.status === 'failed') {
         processStatus.value = 'failed'
         processMessage.value = 'Bulk payroll processing failed'
         cleanupTracking()
+        fetchBatchErrors()
       }
     })
   } catch {
@@ -417,10 +511,12 @@ function startPolling(id) {
         processMessage.value = `Completed! ${s.stats?.successful || 0} payrolls created.`
         processCurrentEmployee.value = ''
         cleanupTracking()
+        if (s.stats?.failed > 0) fetchBatchErrors()
       } else if (s.status === 'failed') {
         processStatus.value = 'failed'
         processMessage.value = 'Bulk payroll processing failed'
         cleanupTracking()
+        fetchBatchErrors()
       }
     } catch { /* polling error, continue */ }
   }, 3000)
@@ -466,6 +562,8 @@ function resetWizard() {
   Object.assign(processStats, { successful: 0, failed: 0, advances_created: 0 })
   Object.assign(wizardForm, { pay_period_date: null, organization: null })
   batchId = null
+  batchErrors.value = []
+  downloadingErrors.value = false
 }
 
 function onExpandRow(expanded, record) {
@@ -517,6 +615,44 @@ function getAllocValue(alloc, key) {
   return map[key] ?? null
 }
 
+// Match staff_id from warning text and find the employee in preview data
+function findEmployeeIdFromWarning(warningText) {
+  const employees = previewData.value?.employees || []
+  for (const emp of employees) {
+    if (emp.staff_id && warningText.includes(emp.staff_id)) return emp.employee_id || null
+    if (emp.name && warningText.includes(emp.name)) return emp.employee_id || null
+  }
+  return null
+}
+
+async function handleDownloadErrors() {
+  if (!batchId) return
+  downloadingErrors.value = true
+  try {
+    const res = await payrollApi.bulkErrors(batchId)
+    const url = window.URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `payroll-errors-batch-${batchId}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch {
+    message.error('Failed to download error report')
+  }
+  downloadingErrors.value = false
+}
+
+async function fetchBatchErrors() {
+  if (!batchId) return
+  try {
+    const { data } = await payrollApi.bulkStatus(batchId)
+    const batch = data.data || data
+    batchErrors.value = batch.errors || []
+  } catch {
+    // Silent — errors are supplementary info
+  }
+}
+
 onUnmounted(() => cleanupTracking())
 </script>
 
@@ -535,6 +671,7 @@ onUnmounted(() => cleanupTracking())
 
 <style scoped>
 .wizard-step { min-height: 200px; }
+.preview-context { font-size: 16px; margin-bottom: 12px; padding: 10px 14px; background: var(--color-bg-subtle, #f9fafb); border-radius: var(--radius-md, 8px); border: 1px solid var(--color-border-light, #f0f0f0); }
 .wizard-footer { display: flex; align-items: center; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border-light, #f0f0f0); }
 .font-mono { font-family: 'SF Mono', 'Consolas', monospace; }
 .font-semibold { font-weight: 600; }

@@ -87,10 +87,9 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Benefit Setting' : 'Add Benefit Setting'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Category" required>
@@ -144,6 +143,11 @@
         <a-form-item label="Active">
           <a-switch v-model:checked="form.is_active" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -157,6 +161,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { benefitSettingApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 
 const getSignal = useAbortController()
@@ -166,7 +171,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const filters = reactive({ category: undefined, filter_is_active: undefined })
 const modalVisible = ref(false)
 const editingItem = ref(null)
@@ -256,12 +263,16 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.setting_key || !form.category) { message.warning('Setting key and category are required'); return false }
+  if (form.setting_value == null) { message.warning('Value is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.setting_key || !form.category) return message.warning('Setting key and category are required')
-  if (form.setting_value == null) return message.warning('Value is required')
-  saving.value = true
-  try {
-    const payload = { ...form }
+  if (!validateForm()) return
+  const payload = { ...form }
+  await submitMain(async () => {
     if (editingItem.value) {
       await benefitSettingApi.update(editingItem.value.id, payload)
       message.success('Setting updated')
@@ -270,11 +281,16 @@ async function handleSave() {
       message.success('Setting created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  const payload = { ...form }
+  await submitAnother(async () => {
+    await benefitSettingApi.store(payload)
+    message.success('Setting created — ready for next entry')
+  })
 }
 
 function handleBulkDelete() {

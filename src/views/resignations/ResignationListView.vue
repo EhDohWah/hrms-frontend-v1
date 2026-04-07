@@ -17,16 +17,16 @@
           <template #prefix><SearchOutlined /></template>
         </a-input>
         <a-select
-          v-model:value="filters.status"
-          placeholder="Status"
+          v-model:value="filters.supervisor_approved"
+          placeholder="Supervisor Status"
           allow-clear
           class="filter-input"
-          style="width: 150px"
+          style="width: 180px"
           @change="onSearchOrFilterChange"
         >
-          <a-select-option value="Pending">Pending</a-select-option>
-          <a-select-option value="Acknowledged">Acknowledged</a-select-option>
-          <a-select-option value="Rejected">Rejected</a-select-option>
+          <a-select-option value="pending">Pending</a-select-option>
+          <a-select-option value="approved">Acknowledged</a-select-option>
+          <a-select-option value="rejected">Declined</a-select-option>
         </a-select>
         <a-select
           v-model:value="filters.department_id"
@@ -85,11 +85,10 @@
           <template v-else-if="column.key === 'last_working_date'">
             {{ formatDate(record.last_working_date) }}
           </template>
-          <template v-else-if="column.key === 'notice_period'">
-            {{ record.notice_period_days ?? '—' }}d
-          </template>
           <template v-else-if="column.key === 'status'">
-            <a-tag :color="getResignationStatusColor(record.status)" size="small">{{ record.status || '—' }}</a-tag>
+            <a-tag :color="getResignationApprovalStatus(record).color" size="small">
+              {{ getResignationApprovalStatus(record).label }}
+            </a-tag>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
@@ -105,8 +104,7 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Resignation' : 'Submit Resignation'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
       :width="'min(95vw, 560px)'"
     >
       <a-form :model="form" layout="vertical" class="modal-form">
@@ -115,17 +113,24 @@
             v-model:value="form.employee_id"
             show-search
             :filter-option="false"
-            placeholder="Search by name or staff ID..."
+            placeholder="Search employee by name or staff ID..."
             :disabled="!!editingItem"
             :loading="employeeSearching"
-            :not-found-content="employeeSearching ? undefined : null"
+            :not-found-content="employeeSearchQuery ? 'No employees found' : 'Type to search...'"
+            allow-clear
             @search="handleEmployeeSearch"
           >
-            <a-select-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id">
-              {{ emp.full_name }} <span class="font-mono" style="color: var(--color-text-muted);">({{ emp.staff_id }})</span>
-              <span v-if="emp.department" style="color: var(--color-text-muted);"> — {{ emp.department }}</span>
+            <a-select-option
+              v-for="emp in employeeOptions"
+              :key="emp.id"
+              :value="emp.id"
+              :label="`${emp.first_name_en} ${emp.last_name_en} — ${emp.staff_id}`"
+            >
+              {{ emp.first_name_en }} {{ emp.last_name_en }}
+              <span class="font-mono" style="color: var(--color-text-muted); font-size: 12px; margin-left: 6px">{{ emp.staff_id }}</span>
             </a-select-option>
           </a-select>
+          <div v-if="editingItem" class="field-hint">Employee cannot be changed in edit mode</div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -139,12 +144,45 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="Reason" required>
-          <a-input v-model:value="form.reason" placeholder="Enter reason for resignation" :maxlength="50" show-count />
+        <a-form-item label="Notes">
+          <a-textarea v-model:value="form.notes" placeholder="Notes (optional)" :rows="3" />
         </a-form-item>
-        <a-form-item label="Details">
-          <a-textarea v-model:value="form.reason_details" placeholder="Additional details (optional)" :rows="3" />
-        </a-form-item>
+        <!-- Acknowledgement Information -->
+        <a-divider orientation="left" orientation-margin="0" style="font-size: 13px; color: var(--color-text-secondary)">
+          Acknowledgement Information
+        </a-divider>
+        <div class="approval-hint">Record acknowledgement status and dates as shown on physical forms</div>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Supervisor Acknowledgement">
+              <a-select
+                v-model:value="form.supervisorStatus"
+                :options="ACKNOWLEDGEMENT_OPTIONS"
+                @change="(val) => onAcknowledgementChange(val, 'supervisor_approved_at')"
+              />
+            </a-form-item>
+            <a-form-item v-if="form.supervisorStatus !== 'pending'" label="Date">
+              <a-date-picker v-model:value="form.supervisor_approved_at" format="DD MMM YYYY" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="HR Acknowledgement">
+              <a-select
+                v-model:value="form.hrStatus"
+                :options="ACKNOWLEDGEMENT_OPTIONS"
+                @change="(val) => onAcknowledgementChange(val, 'hr_manager_approved_at')"
+              />
+            </a-form-item>
+            <a-form-item v-if="form.hrStatus !== 'pending'" label="Date">
+              <a-date-picker v-model:value="form.hr_manager_approved_at" format="DD MMM YYYY" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" :loading="savingMain" :disabled="savingAnother" @click="handleSave">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -157,10 +195,11 @@ import { SearchOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-de
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
-import { resignationApi, departmentApi } from '@/api'
+import { useSaveAnother } from '@/composables/useSaveAnother'
+import { resignationApi, departmentApi, employeeApi } from '@/api'
 import { formatDate } from '@/utils/formatters'
 import { getOrgColor } from '@/constants/organizations'
-import { getResignationStatusColor } from '@/constants/resignations'
+import { getResignationApprovalStatus, ACKNOWLEDGEMENT_OPTIONS, booleanToAcknowledgement, buildResignationPayload } from '@/constants/resignations'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -169,9 +208,11 @@ const getSignal = useAbortController()
 const items = ref([])
 const selectedRowKeys = ref([])
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const search = ref('')
-const filters = reactive({ status: undefined, department_id: undefined })
+const filters = reactive({ supervisor_approved: undefined, department_id: undefined })
 const departmentOptions = ref([])
 const sortState = reactive({ field: 'resignation_date', order: 'descend' })
 const pagination = reactive({ current_page: 1, per_page: 20, total: 0 })
@@ -179,11 +220,14 @@ const modalVisible = ref(false)
 const editingItem = ref(null)
 const employeeOptions = ref([])
 const employeeSearching = ref(false)
+const employeeSearchQuery = ref('')
 let employeeSearchTimer = null
 
 const form = reactive({
   employee_id: undefined, resignation_date: null, last_working_date: null,
-  reason: '', reason_details: '',
+  notes: '',
+  supervisorStatus: 'pending', supervisor_approved_at: null,
+  hrStatus: 'pending', hr_manager_approved_at: null,
 })
 
 const columns = computed(() => [
@@ -192,9 +236,8 @@ const columns = computed(() => [
   { title: 'Position', key: 'position', width: 150 },
   { title: 'Resignation Date', key: 'resignation_date', width: 140, sorter: true, sortOrder: sortState.field === 'resignation_date' ? sortState.order : null },
   { title: 'Last Working Date', key: 'last_working_date', width: 140, sorter: true, sortOrder: sortState.field === 'last_working_date' ? sortState.order : null },
-  { title: 'Notice', key: 'notice_period', width: 80, align: 'center' },
-  { title: 'Reason', dataIndex: 'reason', ellipsis: true },
-  { title: 'Status', key: 'status', width: 120, align: 'center', sorter: true, sortOrder: sortState.field === 'status' ? sortState.order : null },
+  { title: 'Notes', dataIndex: 'notes', ellipsis: true },
+  { title: 'Status', key: 'status', width: 120, align: 'center' },
   { title: '', key: 'actions', width: 140, align: 'right' },
 ])
 
@@ -208,7 +251,7 @@ const tablePagination = computed(() => ({
 }))
 
 
-const SORT_FIELD_MAP = { resignation_date: 'resignation_date', last_working_date: 'last_working_date', status: 'acknowledgement_status' }
+const SORT_FIELD_MAP = { resignation_date: 'resignation_date', last_working_date: 'last_working_date' }
 
 async function fetchItems() {
   loading.value = true
@@ -217,7 +260,7 @@ async function fetchItems() {
       page: pagination.current_page,
       per_page: pagination.per_page,
       ...(search.value && { search: search.value }),
-      ...(filters.status && { acknowledgement_status: filters.status }),
+      ...(filters.supervisor_approved && { supervisor_approved: filters.supervisor_approved }),
       ...(filters.department_id && { department_id: filters.department_id }),
       ...(sortState.field && { sort_by: SORT_FIELD_MAP[sortState.field] || sortState.field, sort_order: sortState.order === 'ascend' ? 'asc' : 'desc' }),
     }
@@ -243,28 +286,41 @@ function handleTableChange(pag, _filters, sorter) {
   fetchItems()
 }
 
-function handleEmployeeSearch(val) {
+function handleEmployeeSearch(query) {
+  employeeSearchQuery.value = query
   if (employeeSearchTimer) clearTimeout(employeeSearchTimer)
-  if (!val || val.length < 2) {
+  if (!query || query.length < 2) {
     employeeOptions.value = []
     return
   }
+  employeeSearchTimer = setTimeout(() => searchEmployees(query), 300)
+}
+
+async function searchEmployees(query) {
   employeeSearching.value = true
-  employeeSearchTimer = setTimeout(async () => {
-    try {
-      const { data } = await resignationApi.searchEmployees({ search: val, limit: 10 })
-      employeeOptions.value = data.data || []
-    } catch { /* ignore */ }
+  try {
+    const { data } = await employeeApi.list({ search: query, per_page: 20 })
+    employeeOptions.value = data?.data || []
+  } catch {
+    employeeOptions.value = []
+  } finally {
     employeeSearching.value = false
-  }, 300)
+  }
 }
 
 function resetForm() {
   Object.assign(form, {
     employee_id: undefined, resignation_date: null, last_working_date: null,
-    reason: '', reason_details: '',
+    notes: '',
+    supervisorStatus: 'pending', supervisor_approved_at: null,
+    hrStatus: 'pending', hr_manager_approved_at: null,
   })
   employeeOptions.value = []
+  employeeSearchQuery.value = ''
+}
+
+function onAcknowledgementChange(val, dateField) {
+  if (val === 'pending') form[dateField] = null
 }
 
 function openCreate() {
@@ -280,41 +336,51 @@ function openEdit(record) {
     employeeOptions.value = [{
       id: record.employee_id,
       staff_id: record.employee.staff_id,
-      full_name: `${record.employee.first_name_en || ''} ${record.employee.last_name_en || ''}`.trim(),
-      department: record.department?.name,
+      first_name_en: record.employee.first_name_en || '',
+      last_name_en: record.employee.last_name_en || '',
     }]
   }
   Object.assign(form, {
     employee_id: record.employee_id || undefined,
     resignation_date: record.resignation_date || null,
     last_working_date: record.last_working_date || null,
-    reason: record.reason || '',
-    reason_details: record.reason_details || '',
+    notes: record.notes || '',
+    supervisorStatus: booleanToAcknowledgement(record.supervisor_approved),
+    supervisor_approved_at: record.supervisor_approved_at ? record.supervisor_approved_at.substring(0, 10) : null,
+    hrStatus: booleanToAcknowledgement(record.hr_manager_approved),
+    hr_manager_approved_at: record.hr_manager_approved_at ? record.hr_manager_approved_at.substring(0, 10) : null,
   })
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.employee_id) { message.warning('Please select an employee'); return false }
+  if (!form.resignation_date) { message.warning('Resignation date is required'); return false }
+  if (!form.last_working_date) { message.warning('Last working date is required'); return false }
+  return true
+}
+
 async function handleSave() {
-  if (!form.employee_id) return message.warning('Please select an employee')
-  if (!form.resignation_date) return message.warning('Resignation date is required')
-  if (!form.reason) return message.warning('Reason is required')
-  if (!form.last_working_date) return message.warning('Last working date is required')
-  saving.value = true
-  try {
-    const payload = { ...form }
+  if (!validateForm()) return
+  await submitMain(async () => {
+    const payload = buildResignationPayload(form, form.employee_id)
     if (editingItem.value) {
       await resignationApi.update(editingItem.value.id, payload)
       message.success('Resignation updated')
     } else {
       await resignationApi.store(payload)
-      message.success('Resignation submitted')
+      message.success('Resignation saved')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  await submitAnother(async () => {
+    await resignationApi.store(buildResignationPayload(form, form.employee_id))
+    message.success('Resignation saved')
+  })
 }
 
 function handleDelete(record) {
@@ -389,8 +455,10 @@ onMounted(() => {
 .page-header-stats { display: flex; gap: 6px; }
 .cell-link { text-decoration: none; color: inherit; }
 .cell-employee { display: flex; flex-direction: column; }
-.cell-name { font-weight: 600; font-size: 13.5px; }
+.cell-name { font-weight: 600; font-size: 13px; }
 .cell-sub { font-size: 12px; color: var(--color-text-muted); display: flex; align-items: center; gap: 4px; }
 .org-tag-inline { margin: 0; font-size: 10px; line-height: 1; }
 .modal-form { margin-top: 16px; }
+.approval-hint { font-size: 12px; color: var(--color-text-muted); margin-bottom: 12px; margin-top: -8px; }
+.field-hint { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
 </style>

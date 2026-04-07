@@ -59,10 +59,9 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingItem ? 'Edit Policy' : 'Add Policy'"
-      @ok="handleSave"
-      :confirm-loading="saving"
+      :footer="null"
     >
-      <a-form :model="form" layout="vertical" class="modal-form">
+      <a-form :model="form" layout="vertical" class="modal-form" @submit.prevent="handleSave">
         <a-form-item label="Policy Key" required>
           <a-input v-model:value="form.policy_key" placeholder="e.g. thirteenth_month" :disabled="!!editingItem" />
         </a-form-item>
@@ -119,6 +118,11 @@
         <a-form-item label="Active">
           <a-switch v-model:checked="form.is_active" />
         </a-form-item>
+        <div class="modal-footer">
+          <a-button @click="modalVisible = false">Cancel</a-button>
+          <a-button v-if="!editingItem" :loading="savingAnother" :disabled="savingMain" @click="handleSaveAndAddAnother">Save &amp; Add Another</a-button>
+          <a-button type="primary" html-type="submit" :loading="savingMain" :disabled="savingAnother">{{ editingItem ? 'Update' : 'Save' }}</a-button>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -132,6 +136,7 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { payrollPolicyApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useSaveAnother } from '@/composables/useSaveAnother'
 import { formatDate } from '@/utils/formatters'
 
 const getSignal = useAbortController()
@@ -141,7 +146,9 @@ const authStore = useAuthStore()
 const items = ref([])
 const categories = ref({})
 const loading = ref(false)
-const saving = ref(false)
+const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother({
+  refresh: fetchItems, reset: resetForm,
+})
 const modalVisible = ref(false)
 const editingItem = ref(null)
 const form = reactive({
@@ -213,15 +220,23 @@ function openEdit(record) {
   modalVisible.value = true
 }
 
+function validateForm() {
+  if (!form.policy_key) { message.warning('Policy key is required'); return false }
+  if (form.setting_type !== 'boolean' && form.policy_value == null) { message.warning('Value is required'); return false }
+  if (!form.effective_date) { message.warning('Effective date is required'); return false }
+  return true
+}
+
+function buildPayload() {
+  const payload = { ...form }
+  if (payload.setting_type === 'boolean') payload.policy_value = null
+  return payload
+}
+
 async function handleSave() {
-  if (!form.policy_key) return message.warning('Policy key is required')
-  if (form.setting_type !== 'boolean' && form.policy_value == null) return message.warning('Value is required')
-  if (!form.effective_date) return message.warning('Effective date is required')
-  saving.value = true
-  try {
-    const payload = { ...form }
-    // Boolean policies don't need a value
-    if (payload.setting_type === 'boolean') payload.policy_value = null
+  if (!validateForm()) return
+  const payload = buildPayload()
+  await submitMain(async () => {
     if (editingItem.value) {
       await payrollPolicyApi.update(editingItem.value.id, payload)
       message.success('Policy updated')
@@ -230,11 +245,16 @@ async function handleSave() {
       message.success('Policy created')
     }
     modalVisible.value = false
-    fetchItems()
-  } catch (err) {
-    message.error(err.response?.data?.message || 'Failed to save')
-  }
-  saving.value = false
+  })
+}
+
+async function handleSaveAndAddAnother() {
+  if (!validateForm()) return
+  const payload = buildPayload()
+  await submitAnother(async () => {
+    await payrollPolicyApi.store(payload)
+    message.success('Policy created')
+  })
 }
 
 function handleDelete(record) {

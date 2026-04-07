@@ -28,6 +28,7 @@ npm install          # Install dependencies
 npm run dev          # Dev server on http://localhost:8080
 npm run build        # Production build (Vite)
 npm run preview      # Preview production build
+ANALYZE=true npm run build  # Bundle analysis → dist/stats.html
 ```
 
 No test runner or linter is configured.
@@ -37,11 +38,33 @@ No test runner or linter is configured.
 Copy `.env.example` to `.env`. Key variables:
 - `VITE_API_BASE_URL` — Backend API (default `http://localhost:8000/api/v1`)
 - `VITE_PUBLIC_URL` — Backend public URL for CSRF cookie
+- `VITE_ENV` — Environment name (`development`/`production`/`staging`)
+- `VITE_APP_NAME` — App display name (default `HRMS`)
 - `VITE_REVERB_*` — WebSocket (Laravel Reverb) config for real-time features
+- `VITE_BROADCASTING_AUTH_ENDPOINT` — WebSocket auth endpoint
 
 ## Architecture
 
 Vue 3 (Composition API + `<script setup>`) + Ant Design Vue 4 + Pinia + Vue Router 4.
+
+### System Philosophy — Data Entry and Display UI
+
+This frontend is the user-facing surface of a **Data Entry and Display System** (see `docs/architecture/HRMS_FRONTEND_ARCHITECTURE.md` and the backend's `HRMS_BACKEND_ARCHITECTURE.md`). The system digitizes paper-based HR processes into a searchable, exportable database. **It is not a workflow tool.**
+
+What this means for code you write here:
+- **Approvals happen offline.** The backend records final states; it does not drive state machines or approval pipelines. Do not build client-side approval queues, "next item" routing, or inbox-style workflow surfaces.
+- **Status fields are data, not workflow stages.** Leave request status, resignation acknowledgement, personnel action approval — all of these are editable form fields set at data-entry time to match a decision already made on paper. Render them as dropdowns/tags in the create/edit form, not as gated Approve/Reject buttons in a separate modal.
+- **No client-side business logic.** Payroll calculation, tax computation, funding allocation, and all other HR business rules live in Laravel services on the backend. The frontend collects data, sends it, and displays the result.
+- **Views own their data.** There are only 3 Pinia stores (`auth`, `notifications`, `uiStore`) for cross-cutting concerns. Do not add domain stores — list views fetch fresh on mount and discard state on unmount.
+- **Four standard view patterns exist** (single-page CRUD + modal, tab-based detail, drawer detail, list + detail page). New modules should reuse one of these shapes rather than inventing new interaction models.
+
+When a design or request implies workflow behavior (approval queues, pending-work dashboards, multi-step wizards beyond a single form), surface the architectural constraint before building it.
+
+### Build Tooling (Vite)
+- **`@` alias** → `src/` directory. Use `@/api/employeeApi` not `../../api/employeeApi`.
+- **Auto-imports**: Ant Design Vue components are auto-imported via `unplugin-vue-components` — no need to manually import `<a-button>`, `<a-table>`, etc.
+- **Production drops `console.*` and `debugger`** via esbuild. Don't rely on console output in prod.
+- **Manual chunks**: `vue-vendor`, `antd`, `utils` — don't add new manual chunks without checking bundle impact.
 
 ### API Layer (`src/api/`)
 - **`axios.js`** — Single axios instance with `withCredentials: true` (HttpOnly cookie auth via Laravel Sanctum). Interceptors handle 401 (token refresh + request queue retry), 419 (CSRF re-fetch + retry), and 403 (custom event dispatch).
@@ -50,12 +73,12 @@ Vue 3 (Composition API + `<script setup>`) + Ant Design Vue 4 + Pinia + Vue Rout
 
 ### State (`src/stores/`)
 - **`auth.js`** — User, permissions (nested `{ module: { read, edit } }`), login/logout, proactive token refresh (5 min before expiry), cross-tab sync via BroadcastChannel.
-- **`notifications.js`** — Notification list, unread count, 30s polling.
-- **`uiStore.js`** — Sidebar collapse state (persisted to localStorage), page title/breadcrumbs.
+- **`notifications.js`** — Notification list, unread count, 30s polling (auto-pauses when tab is hidden, resumes on focus).
+- **`uiStore.js`** (store id: `'ui'`) — Sidebar collapse state (persisted to localStorage), page title/breadcrumbs, viewport width tracking, mobile detection (breakpoint 768px), mobile sidebar overlay state.
 
 ### Routing (`src/router/`)
-- **`routes.js`** — Route definitions. All views are lazy-loaded. Auth routes are guest-only; app routes require authentication.
-- **`guards.js`** — `beforeEach`: initializes auth on first load, redirects guests, checks `meta.permission` via `authStore.canRead()`. NProgress bar on transitions.
+- **`routes.js`** — Route definitions. All views are lazy-loaded. Auth routes are guest-only; app routes require authentication. `DefaultLayout` is eagerly imported (never remounts across navigations).
+- **`guards.js`** — `beforeEach`: initializes auth on first load, redirects guests, checks `meta.permission` via `authStore.canRead()`. NProgress bar only on auth routes and initial load (skipped for in-app navigation). Auto-scrolls to top on navigation.
 
 ### Permissions
 Three layers, all using the same `authStore.hasPermission(module, action)`:
@@ -68,6 +91,14 @@ Three layers, all using the same `authStore.hasPermission(module, action)`:
 - **`usePagination(fetchFn)`** — Pagination state for Ant Design tables; returns `paginationConfig` and `handleTableChange`
 - **`useDebounce(ref, delay)`** — Debounced reactive ref
 - **`useNotification()`** — Wraps Ant Design `message` API (success/error/warning/info)
+- **`useAbortController()`** — Creates AbortController signals for cancellable API calls. Auto-aborts previous request on each new call and cleans up on unmount.
+- **`useTour(tourKey)`** — Ant Design `<a-tour>` with backend persistence. Call `checkAndOpen()` in `onMounted`, `markComplete()` on close, `cleanup()` in `onUnmounted`. Call `resetTourCache()` on logout.
+
+### Utilities (`src/utils/`)
+- **`formatters.js`** — Date, currency, number formatters (see Formatting convention below)
+- **`helpers.js`** — `cleanParams()` to strip null/empty values before API calls
+- **`storage.js`** — Safe localStorage wrapper with JSON serialization. Use instead of direct `localStorage` access.
+- **`activityLog.js`** — `ACTION_COLOR_MAP`, `ACTION_LABEL_MAP`, `formatFieldName()`, `formatValue()` for activity log display
 
 ### Layouts (`src/layouts/`)
 - **`DefaultLayout.vue`** — Sidebar + Header + Content. Starts notification polling and Echo channel subscriptions on mount.
@@ -118,7 +149,7 @@ token: {
 
 **Rules:**
 - To change Ant Design appearance, modify `themeConfig` in `App.vue` — use token overrides and component-level tokens.
-- The LESS vars in `vite.config.js` (`modifyVars`) are legacy from Ant Design v3 migration. Do NOT add new overrides there.
+- LESS is configured in `vite.config.js` with `javascriptEnabled: true`. Do NOT add Ant Design variable overrides there — use `themeConfig` tokens instead.
 - Do NOT use `!important` to override Ant Design styles. Use the Ant Design v4 token API or increase CSS specificity naturally. When touching existing `!important` overrides in `global.less`, migrate them to `themeConfig` component tokens.
 
 ### CSS Variables (`src/styles/global.less`)

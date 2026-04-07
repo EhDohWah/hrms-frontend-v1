@@ -36,6 +36,13 @@ export function calcAge(dob) {
   return dayjs().diff(dayjs(dob), 'year')
 }
 
+export function formatThaiYear(date) {
+  if (!date) return '—'
+  const d = dayjs(date)
+  if (!d.isValid()) return '—'
+  return d.year() + 543
+}
+
 export function fmtFte(val) {
   if (val == null) return '—'
   return `${(Number(val) * 100).toFixed(0)}%`

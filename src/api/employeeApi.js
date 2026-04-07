@@ -8,6 +8,7 @@ export const employeeApi = {
   destroy: (id) => client.delete(`/employees/${id}`),
   destroyBatch: (ids) => client.delete(`/employees/batch/${ids.join(',')}`, { data: { ids } }),
   filter: (params) => client.get('/employees/filter', { params }),
+  checkDuplicate: (params, config) => client.get('/employees/check-duplicate', { params, ...config }),
   export: (params) => client.get('/employees/export', { params, responseType: 'blob' }),
   uploadProfilePicture: (id, formData) => client.post(`/employees/${id}/profile-picture`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

@@ -17,4 +17,6 @@ export const leaveApi = {
   checkOverlap: (payload) => client.post('/leave-requests/check-overlap', payload),
   balances: (params, config) => client.get('/leave-balances', { params, ...config }),
   balanceShow: (employeeId, leaveTypeId) => client.get(`/leave-balances/${employeeId}/${leaveTypeId}`),
+  balanceStore: (payload) => client.post('/leave-balances', payload),
+  balanceUpdate: (id, payload) => client.put(`/leave-balances/${id}`, payload),
 }

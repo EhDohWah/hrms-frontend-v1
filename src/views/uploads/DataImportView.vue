@@ -47,6 +47,55 @@
         <ImportResultAlert :result="results['grant']" @close="results['grant'] = null" />
       </a-card>
 
+      <!-- Employee Import -->
+      <a-card v-if="authStore.canRead('employees')" class="import-card employee-card">
+        <template #title>
+          <div class="card-title">
+            <UserAddOutlined class="card-icon" />
+            <span>Employee Import</span>
+          </div>
+        </template>
+
+        <p class="card-description">
+          Import employee personal information, identification, bank details, contacts, and
+          beneficiaries. New employees only — duplicates are rejected.
+        </p>
+
+        <div class="download-section">
+          <a-button
+            @click="handleDownload('employee-template', 'Employee Template')"
+            :loading="downloading['employee-template']"
+          >
+            <DownloadOutlined /> Download Template
+          </a-button>
+        </div>
+
+        <template v-if="authStore.canCreate('employees')">
+          <a-upload-dragger
+            v-model:file-list="employeeFileList"
+            :before-upload="() => false"
+            :accept="ACCEPTED_TYPES"
+            :max-count="1"
+            class="upload-dragger"
+          >
+            <p class="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p class="ant-upload-text">Click or drag file to upload</p>
+            <p class="ant-upload-hint">.xlsx, .xls, or .csv (max 10 MB)</p>
+          </a-upload-dragger>
+
+          <a-button
+            type="primary"
+            :loading="uploading['employee']"
+            class="upload-btn"
+            @click="handleEmployeeUpload"
+          >
+            <UploadOutlined /> Upload
+          </a-button>
+        </template>
+
+        <ImportResultAlert :result="results['employee']" @close="results['employee'] = null" />
+      </a-card>
+
       <!-- Data Onboarding -->
       <a-card v-if="authStore.canRead('employees')" class="import-card onboarding-card">
         <template #title>
@@ -108,6 +157,7 @@ import {
   UploadOutlined,
   InboxOutlined,
   TrophyOutlined,
+  UserAddOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadApi } from '@/api'
@@ -125,6 +175,7 @@ const authStore = useAuthStore()
 const notify = useNotification()
 
 const grantFileList = ref([])
+const employeeFileList = ref([])
 const onboardingFileList = ref([])
 const downloading = reactive({})
 const uploading = reactive({})
@@ -217,7 +268,73 @@ async function handleGrantUpload() {
     }
 
     grantFileList.value = []
-    notify.success('Grant imported successfully')
+    if (hasIssues) {
+      notify.warning('Grant import completed with issues')
+    } else {
+      notify.success('Grant imported successfully')
+    }
+  } catch (err) {
+    const errData = err.response?.data
+    let errorList = []
+    if (errData?.errors) {
+      errorList = Array.isArray(errData.errors)
+        ? errData.errors.slice(0, 10)
+        : Object.values(errData.errors).flat().slice(0, 10)
+    }
+    results[KEY] = {
+      type: 'error',
+      message: 'Import Failed',
+      description: errData?.message || 'An error occurred during import.',
+      errors: errorList,
+    }
+  } finally {
+    uploading[KEY] = false
+  }
+}
+
+// ─── Employee Upload ────────────────────────────────────────────
+
+async function handleEmployeeUpload() {
+  const KEY = 'employee'
+  const file = extractFile(employeeFileList)
+  if (!file) return
+
+  uploading[KEY] = true
+  results[KEY] = null
+
+  try {
+    const response = await uploadApi.upload(KEY, file)
+    const data = response.data
+    const importData = data?.data ?? {}
+    const errors = importData.errors ?? []
+    const warnings = importData.warnings ?? []
+    const created = importData.processed_count ?? 0
+
+    const description = errors.length > 0
+      ? `${errors.length} validation error(s). No employees were created.`
+      : `${created} employee(s) created successfully.`
+
+    const errorMessages = errors.slice(0, 10)
+    if (errors.length > 10) errorMessages.push(`... and ${errors.length - 10} more error(s)`)
+
+    const warningMessages = warnings.slice(0, 10)
+    if (warnings.length > 10) warningMessages.push(`... and ${warnings.length - 10} more warning(s)`)
+
+    const hasErrors = errors.length > 0
+    const hasWarnings = warningMessages.length > 0
+
+    results[KEY] = {
+      type: hasErrors ? 'error' : hasWarnings ? 'warning' : 'success',
+      message: hasErrors ? 'Import Failed' : hasWarnings ? 'Import Complete with Warnings' : 'Import Complete',
+      description,
+      errors: hasErrors ? errorMessages : [],
+      warnings: hasWarnings ? warningMessages : [],
+    }
+
+    if (!hasErrors) employeeFileList.value = []
+    notify[hasErrors ? 'error' : hasWarnings ? 'warning' : 'success'](
+      hasErrors ? 'Employee import failed — check errors below' : 'Employee import completed',
+    )
   } catch (err) {
     const errData = err.response?.data
     let errorList = []
@@ -357,6 +474,9 @@ const ImportResultAlert = {
 
 .grant-card {
   border-top: 3px solid #faad14;
+}
+.employee-card {
+  border-top: 3px solid #52c41a;
 }
 .onboarding-card {
   border-top: 3px solid #1677ff;

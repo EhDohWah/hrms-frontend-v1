@@ -8,21 +8,42 @@
       </div>
     </div>
 
-    <!-- ── Quick Stats ────────────────────────────────────── -->
-    <div class="stats-grid" data-tour="stats-cards">
-      <div class="stat-card" v-for="stat in quickStats" :key="stat.label">
-        <div class="stat-icon" :style="{ background: stat.bg, color: stat.color }">
-          <component :is="stat.icon" />
-        </div>
-        <div class="stat-content">
-          <span class="stat-value">{{ stat.value }}</span>
-          <span class="stat-label">{{ stat.label }}</span>
-        </div>
+    <!-- ── Quick Stats (only if user has relevant permissions) ── -->
+    <template v-if="quickStats.length">
+      <div class="stats-grid" data-tour="stats-cards">
+        <router-link
+          v-for="stat in quickStats"
+          :key="stat.label"
+          :to="stat.to"
+          class="stat-card"
+        >
+          <div class="stat-icon" :style="{ background: stat.bg, color: stat.color }">
+            <component :is="stat.icon" />
+          </div>
+          <div class="stat-content">
+            <template v-if="statsLoading">
+              <a-skeleton-input :active="true" size="small" style="width: 40px; height: 24px;" />
+              <span class="stat-label">{{ stat.label }}</span>
+            </template>
+            <template v-else>
+              <span class="stat-value">{{ stat.value }}</span>
+              <span class="stat-label">{{ stat.label }}</span>
+            </template>
+          </div>
+        </router-link>
       </div>
-    </div>
+      <div class="stats-meta">
+        <span v-if="lastUpdated" class="stats-timestamp">
+          As of {{ lastUpdated }}
+        </span>
+        <button class="stats-refresh" :disabled="statsLoading" @click="refreshStats">
+          <ReloadOutlined :spin="statsLoading" />
+        </button>
+      </div>
+    </template>
 
-    <!-- ── Quick Actions ──────────────────────────────────── -->
-    <a-card class="section-card section-actions" :bordered="false" data-tour="quick-actions">
+    <!-- ── Quick Actions (only if user has any HR permissions) ── -->
+    <a-card v-if="quickStats.length" class="section-card section-actions" :bordered="false" data-tour="quick-actions">
       <QuickActionsWidget />
     </a-card>
 
@@ -41,6 +62,9 @@
         <a-divider class="section-divider" />
         <div class="sub-header">Recent Hires</div>
         <RecentHiresWidget />
+        <a-divider class="section-divider" />
+        <div class="sub-header">Probation Ending Soon</div>
+        <ProbationTrackerWidget />
       </a-card>
 
       <!-- Leave -->
@@ -53,7 +77,7 @@
         </template>
         <LeaveSummaryWidget />
         <a-divider class="section-divider" />
-        <div class="sub-header">Pending Requests</div>
+        <div class="sub-header">Pending Leave Requests</div>
         <PendingLeaveRequestsWidget />
       </a-card>
 
@@ -82,6 +106,61 @@
         <a-divider class="section-divider" />
         <div class="sub-header">Open Positions</div>
         <OpenPositionsWidget />
+      </a-card>
+
+      <!-- Resignation -->
+      <a-card v-if="can.resignations" class="section-card" :bordered="false" data-tour="widget-resignation">
+        <template #title>
+          <span class="section-header">
+            <span class="section-dot resignation" />
+            Resignation
+          </span>
+        </template>
+        <ResignationStatsWidget />
+      </a-card>
+
+      <!-- System Health (admin only) -->
+      <a-card v-if="can.admin" class="section-card" :bordered="false" data-tour="widget-admin">
+        <template #title>
+          <span class="section-header">
+            <span class="section-dot admin" />
+            System Health
+          </span>
+        </template>
+        <SystemHealthWidget />
+      </a-card>
+
+      <!-- Recent Errors (admin only) -->
+      <a-card v-if="can.admin" class="section-card" :bordered="false" data-tour="widget-errors">
+        <template #title>
+          <span class="section-header">
+            <span class="section-dot error" />
+            Recent Errors
+          </span>
+        </template>
+        <RecentErrorsWidget />
+      </a-card>
+
+      <!-- Failed Jobs (admin only) -->
+      <a-card v-if="can.admin" class="section-card" :bordered="false" data-tour="widget-jobs">
+        <template #title>
+          <span class="section-header">
+            <span class="section-dot warning" />
+            Failed Jobs
+          </span>
+        </template>
+        <FailedJobsWidget />
+      </a-card>
+
+      <!-- Recent Activity -->
+      <a-card class="section-card" :bordered="false" data-tour="widget-activity">
+        <template #title>
+          <span class="section-header">
+            <span class="section-dot activity" />
+            Recent Activity
+          </span>
+        </template>
+        <UserActivityWidget />
       </a-card>
 
       <!-- Notifications (full width) -->
@@ -123,9 +202,10 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { dashboardApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { STAT_COLORS } from '@/constants/colors'
 import { useTour } from '@/composables/useTour'
 import {
-  QuestionCircleOutlined,
+  QuestionCircleOutlined, ReloadOutlined,
   TeamOutlined, CalendarOutlined, DollarOutlined, FileTextOutlined,
 } from '@ant-design/icons-vue'
 
@@ -140,6 +220,12 @@ import UpcomingPayrollWidget from '@/components/dashboard/widgets/UpcomingPayrol
 import PendingInterviewsWidget from '@/components/dashboard/widgets/PendingInterviewsWidget.vue'
 import OpenPositionsWidget from '@/components/dashboard/widgets/OpenPositionsWidget.vue'
 import SystemNotificationsWidget from '@/components/dashboard/widgets/SystemNotificationsWidget.vue'
+import ResignationStatsWidget from '@/components/dashboard/widgets/ResignationStatsWidget.vue'
+import ProbationTrackerWidget from '@/components/dashboard/widgets/ProbationTrackerWidget.vue'
+import UserActivityWidget from '@/components/dashboard/widgets/UserActivityWidget.vue'
+import SystemHealthWidget from '@/components/dashboard/widgets/SystemHealthWidget.vue'
+import RecentErrorsWidget from '@/components/dashboard/widgets/RecentErrorsWidget.vue'
+import FailedJobsWidget from '@/components/dashboard/widgets/FailedJobsWidget.vue'
 
 const dayjs = inject('$dayjs')
 const appStore = useAppStore()
@@ -152,6 +238,8 @@ const can = computed(() => ({
   leave: auth.canRead('leave_requests'),
   payroll: auth.canRead('employee_salaries'),
   recruitment: auth.canRead('interviews') || auth.canRead('job_offers'),
+  resignations: auth.canRead('resignations'),
+  admin: auth.hasRole('admin'),
 }))
 
 // ── Tour ──────────────────────────────────────────────────
@@ -181,15 +269,24 @@ const canAny = (...perms) => perms.some((p) => auth.canRead(p))
 
 // Tour steps are computed so they react to permission changes and only
 // include sidebar sections the user can actually see in the DOM.
+const isAdmin = computed(() => auth.hasRole('admin'))
+
 const tourSteps = computed(() => {
   const steps = [
     // Phase 1 — Sidebar Navigation (top to bottom)
-    { title: 'Welcome to HRMS', description: 'This is your Dashboard — your starting point. It shows key metrics, pending tasks, and a quick overview of what needs your attention today.', target: sidebarEl('nav-dashboard'), placement: 'right' },
-    { title: 'Notifications', description: 'Stay on top of approvals, payroll alerts, and system updates. A badge appears when you have unread items.', target: sidebarEl('nav-notifications'), placement: 'right' },
+    {
+      title: 'Welcome to HRMS',
+      description: isAdmin.value
+        ? 'This is your Dashboard — your starting point for monitoring system health, reviewing errors, and managing system configuration.'
+        : 'This is your Dashboard — your starting point. It shows key metrics and a quick overview of your HR data.',
+      target: sidebarEl('nav-dashboard'),
+      placement: 'right',
+    },
+    { title: 'Notifications', description: 'Stay on top of system alerts and updates. A badge appears when you have unread items.', target: sidebarEl('nav-notifications'), placement: 'right' },
   ]
 
   // Sidebar sections — only include steps for sections the user can see.
-  // Each entry mirrors the permission check in AppSidebar's visibleSections.
+  // Each entry can use perms (module permission check) or role (role check).
   const sidebarSteps = [
     { perms: ['grants'], title: 'Grants', description: 'Manage grant funding, track grant periods, and oversee grant-funded positions. View active grants and their budget allocations.', key: 'grants-menu' },
     { perms: ['interviews', 'job_offers'], title: 'Recruitment', description: 'Run your hiring pipeline — schedule and score interviews, then convert candidates into job offers with a few clicks.', key: 'recruitment-menu' },
@@ -203,13 +300,17 @@ const tourSteps = computed(() => {
     { perms: ['sites', 'departments', 'positions'], title: 'Organization', description: 'Define your organizational structure — sites (locations), departments, and job positions.', key: 'organization-menu' },
     { perms: ['benefit_settings', 'tax_settings', 'payroll_items'], title: 'Settings', description: 'Configure benefits, tax brackets, tax calculation rules, and payroll policies that apply across the system.', key: 'settings-menu' },
     { perms: ['users', 'roles'], title: 'Administration', description: 'Manage user accounts and assign roles to control who can access what across the system.', key: 'admin-menu' },
-    // System section: Activity Log has no permission, so always visible
-    { perms: [], title: 'System', description: 'View the activity log to audit changes, and restore deleted records from the recycle bin.', key: 'system-menu' },
+    { role: 'admin', title: 'Administration', description: 'Manage lookup data (dropdown values used across the system), review login history, and monitor user activity.', key: 'admin-menu' },
+    { role: 'admin', title: 'System', description: 'Monitor system health, review errors and failed jobs, check API performance, view the audit trail, recover deleted records, and configure system settings.', key: 'system-menu' },
+    { perms: ['activity_logs', 'recycle_bin'], title: 'System', description: 'View the activity log to audit changes, and restore deleted records from the recycle bin.', key: 'system-menu' },
   ]
 
   for (const s of sidebarSteps) {
-    // perms: [] means always visible (has items with no permission check)
-    if (s.perms.length === 0 || canAny(...s.perms)) {
+    if (s.role) {
+      if (auth.hasRole(s.role)) {
+        steps.push({ title: s.title, description: s.description, target: sidebarEl(s.key), placement: 'right' })
+      }
+    } else if (s.perms.length === 0 || canAny(...s.perms)) {
       steps.push({ title: s.title, description: s.description, target: sidebarEl(s.key), placement: 'right' })
     }
   }
@@ -217,32 +318,52 @@ const tourSteps = computed(() => {
   // Collapse button — always visible on desktop
   steps.push({ title: 'Collapse Sidebar', description: 'Click here to collapse or expand the sidebar menu. Gives you more screen space when you need it.', target: sidebarEl('sidebar-collapse'), placement: 'right' })
 
-  // Phase 2 — Dashboard Content (row by row)
-  steps.push(
-    { title: 'Quick Stats', description: 'A snapshot of your key numbers — total employees, who\'s on leave today, pending requests, and this month\'s payroll status.', target: el('stats-cards'), placement: 'bottom' },
-    { title: 'Quick Actions', description: 'Shortcuts to common tasks — add employees, manage leave, run payroll, and more. One click to get started.', target: el('quick-actions'), placement: 'bottom' },
-  )
+  // Phase 2 — Dashboard Content (depends on role)
+  if (isAdmin.value) {
+    // Admin dashboard tour
+    steps.push(
+      { title: 'System Health', description: 'Live status of your database, cache, storage, and job queue. Green means healthy, yellow means degraded, red means down. Click any row for details.', target: el('widget-admin'), placement: 'bottom' },
+    )
+    // Recent Errors and Failed Jobs only show if the cards are in the DOM
+    const errEl = document.querySelector('[data-tour="widget-errors"]')
+    if (errEl) {
+      steps.push({ title: 'Recent Errors', description: 'Application errors from the last 24 hours. Spot recurring issues before users report them.', target: () => errEl, placement: 'right' })
+    }
+    const jobEl = document.querySelector('[data-tour="widget-jobs"]')
+    if (jobEl) {
+      steps.push({ title: 'Failed Jobs', description: 'Background jobs that failed — payroll processing, data imports. Retry or investigate from here.', target: () => jobEl, placement: 'left' })
+    }
+  } else {
+    // HR Manager dashboard tour
+    if (quickStats.value.length) {
+      steps.push(
+        { title: 'Quick Stats', description: 'A snapshot of your key numbers — total employees, who\'s on leave today, pending leave requests, and this month\'s payroll records. Click any card to go to that section.', target: el('stats-cards'), placement: 'bottom' },
+        { title: 'Quick Actions', description: 'Shortcuts to common tasks — add employees, manage leave, run payroll, and more. One click to get started.', target: el('quick-actions'), placement: 'bottom' },
+      )
+    }
 
-  // Widget cards — permission-gated, same conditions as the template v-if
-  if (can.value.employees) {
-    steps.push({ title: 'People', description: 'Employee headcount, organization breakdown, and your most recent hires at a glance.', target: el('widget-people'), placement: 'right' })
+    if (can.value.employees) {
+      steps.push({ title: 'People', description: 'Employee headcount, organization breakdown, and your most recent hires at a glance.', target: el('widget-people'), placement: 'right' })
+    }
+    if (can.value.leave) {
+      steps.push({ title: 'Leave', description: 'Leave request counts by status and who\'s on leave today.', target: el('widget-leave'), placement: 'left' })
+    }
+    if (can.value.payroll) {
+      steps.push({ title: 'Payroll', description: 'Current month payroll summary and upcoming payroll schedule.', target: el('widget-payroll'), placement: 'right' })
+    }
+    if (can.value.recruitment) {
+      steps.push({ title: 'Recruitment', description: 'Upcoming interviews and vacant positions that need to be filled.', target: el('widget-recruitment'), placement: 'left' })
+    }
   }
-  if (can.value.leave) {
-    steps.push({ title: 'Leave', description: 'Pending, approved, and declined leave requests. See who\'s on leave today.', target: el('widget-leave'), placement: 'left' })
-  }
-  if (can.value.payroll) {
-    steps.push({ title: 'Payroll', description: 'Current month payroll summary and upcoming payroll schedule.', target: el('widget-payroll'), placement: 'right' })
-  }
-  if (can.value.recruitment) {
-    steps.push({ title: 'Recruitment', description: 'Upcoming interviews and vacant positions that need to be filled.', target: el('widget-recruitment'), placement: 'left' })
-  }
+
   steps.push(
-    { title: 'Notifications', description: 'Recent system notifications — approvals, imports, and alerts all in one place.', target: el('widget-notifications'), placement: 'top' },
+    { title: 'Recent Activity', description: 'The latest records created, updated, or deleted across the system.', target: el('widget-activity'), placement: 'top' },
+    { title: 'Notifications', description: 'Recent system notifications — all in one place.', target: el('widget-notifications'), placement: 'top' },
   )
 
   // Phase 3 — Top Bar Utilities (always visible)
   steps.push(
-    { title: 'Notification Bell', description: 'Quick access to your latest notifications without leaving the page. Click to see recent alerts at a glance.', target: el('notification-bell'), placement: 'bottom' },
+    { title: 'Notification Bell', description: 'Quick access to your latest notifications without leaving the page.', target: el('notification-bell'), placement: 'bottom' },
     { title: 'Your Profile', description: 'View your profile, update your password, or sign out. You\'re all set — enjoy using HRMS!', target: el('profile-dropdown'), placement: 'bottomRight' },
   )
 
@@ -262,28 +383,47 @@ const todayFormatted = computed(() => dayjs().format('dddd, MMMM D, YYYY'))
 
 // ── Quick Stats ───────────────────────────────────────────
 const statsData = ref({
-  total_employees: '—',
-  on_leave_today: '—',
-  pending_requests: '—',
-  payroll_this_month: '—',
+  total_employees: 0,
+  on_leave_today: 0,
+  pending_requests: 0,
+  payroll_this_month: 0,
+})
+const statsLoading = ref(true)
+const lastUpdated = ref('')
+
+const quickStats = computed(() => {
+  const stats = []
+  if (auth.canRead('employees')) {
+    stats.push({ label: 'Total Employees', value: statsData.value.total_employees, icon: markRaw(TeamOutlined), ...STAT_COLORS.blue, to: '/employees' })
+  }
+  if (auth.canRead('leave_requests')) {
+    stats.push({ label: 'On Leave Today', value: statsData.value.on_leave_today, icon: markRaw(CalendarOutlined), ...STAT_COLORS.amber, to: '/leave-requests' })
+    stats.push({ label: 'Pending Leave', value: statsData.value.pending_requests, icon: markRaw(FileTextOutlined), ...STAT_COLORS.pink, to: '/leave-requests' })
+  }
+  if (auth.canRead('employee_salaries')) {
+    stats.push({ label: 'Payroll This Month', value: statsData.value.payroll_this_month, icon: markRaw(DollarOutlined), ...STAT_COLORS.green, to: '/payroll' })
+  }
+  return stats
 })
 
-const quickStats = computed(() => [
-  { label: 'Total Employees', value: statsData.value.total_employees, icon: markRaw(TeamOutlined), bg: '#eff6ff', color: '#2563eb' },
-  { label: 'On Leave Today', value: statsData.value.on_leave_today, icon: markRaw(CalendarOutlined), bg: '#fef3c7', color: '#d97706' },
-  { label: 'Pending Requests', value: statsData.value.pending_requests, icon: markRaw(FileTextOutlined), bg: '#fce7f3', color: '#db2777' },
-  { label: 'Payroll This Month', value: statsData.value.payroll_this_month, icon: markRaw(DollarOutlined), bg: '#f0fdf4', color: '#16a34a' },
-])
+async function fetchQuickStats() {
+  statsLoading.value = true
+  try {
+    const res = await dashboardApi.quickStats({ signal: getSignal() })
+    statsData.value = res.data.data
+    lastUpdated.value = dayjs().format('HH:mm')
+  } catch { /* silent */ }
+  finally { statsLoading.value = false }
+}
+
+function refreshStats() {
+  if (!statsLoading.value) fetchQuickStats()
+}
 
 // ── Init ──────────────────────────────────────────────────
 onMounted(async () => {
   appStore.setPageMeta('Dashboard')
-
-  try {
-    const res = await dashboardApi.quickStats({ signal: getSignal() })
-    statsData.value = res.data.data
-  } catch { /* silent — stats show dashes until loaded */ }
-
+  await fetchQuickStats()
   checkAndOpen()
 })
 </script>
@@ -347,6 +487,11 @@ onMounted(async () => {
 .section-dot.leave { background: #d97706; }
 .section-dot.payroll { background: #16a34a; }
 .section-dot.recruitment { background: #7c3aed; }
+.section-dot.resignation { background: #dc2626; }
+.section-dot.admin { background: #0d9488; }
+.section-dot.error { background: #dc2626; }
+.section-dot.warning { background: #d97706; }
+.section-dot.activity { background: #6366f1; }
 .section-dot.notifications { background: var(--color-primary, #002147); }
 
 /* ── Inner content ─────────────────────────────────────── */

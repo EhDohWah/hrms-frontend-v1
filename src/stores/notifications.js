@@ -67,6 +67,7 @@ export const useNotificationStore = defineStore('notifications', () => {
         type: notification.type,
         data: notification,
         message: notification.message,
+        error_details: notification.error_details || null,
         category: notification.category,
         category_label: notification.category_label,
         category_icon: notification.category_icon,

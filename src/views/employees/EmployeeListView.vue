@@ -71,6 +71,7 @@
         :pagination="tablePagination"
         :row-key="(r) => r.id"
         :row-selection="authStore.canEdit('employees') ? { selectedRowKeys, onChange: (keys) => selectedRowKeys = keys } : undefined"
+        :row-class-name="(record) => record.is_resigned ? 'row-resigned' : ''"
         :scroll="{ x: 'max-content', y: 600 }"
         :virtual="true"
         @change="handleTableChange"
@@ -171,6 +172,7 @@
             :key="record.id"
             :to="{ name: 'employee-detail', params: { id: record.id } }"
             class="mobile-employee-card"
+            :class="{ 'mobile-card-resigned': record.is_resigned }"
           >
             <a-avatar :size="40" :style="{ backgroundColor: getAvatarColor(record.staff_id), fontSize: '14px', fontWeight: 600, flexShrink: 0 }">
               {{ getInitials(record) }}
@@ -304,10 +306,10 @@ const columns = computed(() => [
   { title: 'Age', key: 'age', width: 60, align: 'center', sorter: true, sortOrder: sortField.value === 'age' ? sortOrder.value : null },
   { title: 'Department', key: 'department', width: 160, ellipsis: true },
   { title: 'Position', key: 'position', width: 160, ellipsis: true },
-  { title: 'Status', key: 'status', width: 140, sorter: true, sortOrder: sortField.value === 'status' ? sortOrder.value : null },
+  { title: 'Employee Status', key: 'status', width: 150, sorter: true, sortOrder: sortField.value === 'status' ? sortOrder.value : null, ellipsis: true},
   { title: 'ID Type', key: 'id_type', width: 130, sorter: true, sortOrder: sortField.value === 'id_type' ? sortOrder.value : null },
   { title: 'ID Number', key: 'id_number', width: 140 },
-  { title: 'SSN', key: 'ssn', width: 140 },
+  { title: 'Social Security Number', key: 'ssn', width: 140, ellipsis: true},
   { title: 'Tax No.', key: 'tax_no', width: 120 },
   { title: 'Mobile', key: 'mobile', width: 130 },
   { title: '', key: 'actions', width: 80, align: 'right', fixed: 'right' },
@@ -446,7 +448,7 @@ const viewStatusKey = computed(() => {
   const e = viewEmployee.value
   if (!e) return 'active'
   const resignation = e.employment?.resignation
-  if (resignation?.acknowledgement_status === 'Approved') return 'expired'
+  if (resignation?.supervisor_approved === true && resignation?.hr_manager_approved === true) return 'expired'
   if (resignation) return 'ending-soon'
   return 'active'
 })
@@ -811,6 +813,10 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 4px;
 }
+.mobile-card-resigned {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
 .mobile-pagination {
   margin-top: 16px;
   display: flex;
@@ -883,5 +889,15 @@ onMounted(() => {
 }
 .record-view-modal .ant-modal-close {
   display: none !important;
+}
+</style>
+
+<!-- Unscoped: resigned row highlighting for Ant Design table -->
+<style>
+.row-resigned td {
+  background: var(--color-danger-bg) !important;
+}
+.row-resigned:hover td {
+  background: #fee2e2 !important;
 }
 </style>

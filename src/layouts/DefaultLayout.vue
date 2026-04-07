@@ -19,6 +19,7 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
@@ -31,8 +32,13 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const notifStore = useNotificationStore()
 
+function handlePermissionDenied(event) {
+  message.warning(event.detail?.message || 'You do not have permission to access this resource.')
+}
+
 onMounted(async () => {
   window.addEventListener('resize', appStore.handleResize)
+  window.addEventListener('permission-denied', handlePermissionDenied)
   notifStore.startPolling()
 
   if (authStore.user?.id) {
@@ -45,6 +51,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', appStore.handleResize)
+  window.removeEventListener('permission-denied', handlePermissionDenied)
   notifStore.stopPolling()
   destroyEcho()
 })

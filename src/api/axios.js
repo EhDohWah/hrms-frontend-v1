@@ -34,7 +34,7 @@ client.interceptors.response.use(
 
       // Session expired — clear local state and redirect to login
       clearAuthData()
-      router.push({ name: 'login' })
+      router.push({ name: 'login', query: { reason: 'session-expired' } })
       return Promise.reject(error)
     }
 

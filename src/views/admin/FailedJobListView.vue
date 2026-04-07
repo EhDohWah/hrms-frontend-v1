@@ -178,7 +178,7 @@ function handleFlush() {
 }
 
 onMounted(() => {
-  appStore.setPageMeta('Failed Jobs', [{ title: 'System' }, { title: 'Failed Jobs' }])
+  appStore.setPageMeta('Failed Jobs', [{ title: 'System' }])
   refresh()
 })
 </script>

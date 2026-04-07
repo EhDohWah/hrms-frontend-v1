@@ -72,7 +72,10 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'user'">
             <span class="cell-name">{{ record.user?.name || '—' }}</span>
-            <span class="cell-sub">{{ record.email }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'email'">
+            <span>{{ record.email }}</span>
           </template>
 
           <template v-else-if="column.key === 'status'">
@@ -156,7 +159,8 @@ async function fetchSummary() {
 
 // ── Table ──
 const columns = [
-  { title: 'User', key: 'user', width: 200 },
+  { title: 'User', key: 'user', width: 160 },
+  { title: 'Email', key: 'email', width: 200 },
   { title: 'Status', key: 'status', width: 160 },
   { title: 'IP Address', key: 'ip_address', width: 140 },
   { title: 'Browser / Device', key: 'user_agent', width: 200, ellipsis: true },
@@ -229,10 +233,7 @@ function parseUserAgent(ua) {
 
 // ── Init ──
 onMounted(() => {
-  appStore.setPageMeta('Login History', [
-    { title: 'Administration' },
-    { title: 'Login History' },
-  ])
+  appStore.setPageMeta('Login History', [{ title: 'Administration' }])
   refresh()
   fetchSummary()
 })

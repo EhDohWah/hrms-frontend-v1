@@ -347,7 +347,7 @@ function navigate(item) {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 18px;
   flex-shrink: 0;
 }
 .logo-text {

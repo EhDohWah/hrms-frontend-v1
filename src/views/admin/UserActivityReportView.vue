@@ -35,10 +35,11 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'user'">
-            <div class="cell-employee">
-              <span class="cell-name">{{ record.name }}</span>
-              <span class="cell-sub">{{ record.email }}</span>
-            </div>
+            <span class="cell-name">{{ record.name }}</span>
+          </template>
+
+          <template v-else-if="column.key === 'email'">
+            <span>{{ record.email }}</span>
           </template>
 
           <template v-else-if="column.key === 'role_name'">
@@ -100,7 +101,8 @@ const items = ref([])
 const loading = ref(false)
 
 const columns = [
-  { title: 'User', key: 'user', width: 220 },
+  { title: 'User', key: 'user', width: 160 },
+  { title: 'Email', key: 'email', width: 200 },
   { title: 'Role', key: 'role_name', width: 120 },
   { title: 'Status', key: 'status', width: 90, align: 'center' },
   { title: 'Logins (30d)', key: 'login_count', width: 120, align: 'center', sorter: true },
@@ -142,10 +144,7 @@ function isInactive(lastLogin) {
 }
 
 onMounted(() => {
-  appStore.setPageMeta('User Activity', [
-    { title: 'Administration' },
-    { title: 'User Activity' },
-  ])
+  appStore.setPageMeta('User Activity', [{ title: 'Administration' }])
   refresh()
 })
 </script>

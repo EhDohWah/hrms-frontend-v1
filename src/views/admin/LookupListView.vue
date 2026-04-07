@@ -286,7 +286,7 @@ function formatType(type) {
 
 // ── Init ──
 onMounted(() => {
-  appStore.setPageMeta('Lookup Data', [{ title: 'Administration' }, { title: 'Lookup Data' }])
+  appStore.setPageMeta('Lookup Data', [{ title: 'Administration' }])
   fetchItems()
   fetchTypes()
 })

@@ -197,7 +197,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, markRaw, watch } from 'vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { dashboardApi } from '@/api'
@@ -245,6 +245,17 @@ const can = computed(() => ({
 // ── Tour ──────────────────────────────────────────────────
 const { isTourOpen, currentStep, checkAndOpen, markComplete, restart, cleanup } = useTour('app_welcome')
 onUnmounted(cleanup)
+
+// After password change, needsPasswordChange transitions true→false.
+// Trigger the tour so the user sees it immediately without a page refresh.
+watch(
+  () => auth.needsPasswordChange,
+  (newVal, oldVal) => {
+    if (oldVal === true && newVal === false) {
+      checkAndOpen()
+    }
+  },
+)
 
 const el = (key) => () => document.querySelector(`[data-tour="${key}"]`)
 

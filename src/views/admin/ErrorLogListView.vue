@@ -243,7 +243,7 @@ function handleCleanup() {
 }
 
 onMounted(() => {
-  appStore.setPageMeta('Error Logs', [{ title: 'System' }, { title: 'Error Logs' }])
+  appStore.setPageMeta('Error Logs', [{ title: 'System' }])
   refresh()
 })
 </script>

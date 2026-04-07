@@ -91,7 +91,7 @@ async function fetchHealth() {
 }
 
 onMounted(() => {
-  appStore.setPageMeta('System Health', [{ title: 'System' }, { title: 'System Health' }])
+  appStore.setPageMeta('System Health', [{ title: 'System' }])
   fetchHealth()
 })
 </script>

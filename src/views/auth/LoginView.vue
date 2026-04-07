@@ -51,6 +51,20 @@
             </div>
 
             <a-alert
+              v-if="sessionExpired"
+              type="info"
+              show-icon
+              closable
+              @close="dismissSessionExpired"
+              style="margin-bottom: 20px"
+            >
+              <template #message>Session Expired</template>
+              <template #description>
+                Your session has expired. Please sign in again to continue.
+              </template>
+            </a-alert>
+
+            <a-alert
               v-if="sessionConflict"
               type="warning"
               show-icon
@@ -124,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { MailOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons-vue'
@@ -142,6 +156,11 @@ const loading = ref(false)
 const errorMessage = ref('')
 const sessionConflict = ref(false)
 const sessionConflictMessage = ref('')
+const sessionExpired = computed(() => route.query.reason === 'session-expired')
+
+function dismissSessionExpired() {
+  router.replace({ ...route, query: { ...route.query, reason: undefined } })
+}
 
 async function handleLogin() {
   loading.value = true

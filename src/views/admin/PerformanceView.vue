@@ -148,7 +148,7 @@ async function fetchAll() {
 }
 
 onMounted(() => {
-  appStore.setPageMeta('Performance', [{ title: 'System' }, { title: 'Performance' }])
+  appStore.setPageMeta('Performance', [{ title: 'System' }])
   fetchAll()
 })
 </script>

@@ -39,7 +39,7 @@
         :loading="loading"
         :pagination="false"
         :row-key="(r) => r.employeeKey"
-        :expandedRowKeys="expandedKeys"
+        :expanded-row-keys="expandedKeys"
         @expandedRowsChange="(keys) => expandedKeys = keys"
         size="middle"
         class="balance-nested-table"
@@ -68,43 +68,37 @@
         </template>
 
         <template #expandedRowRender="{ record }">
-          <div class="expanded-section">
-            <div class="expanded-header">
-              <span class="expanded-title">Leave Balances</span>
-            </div>
-            <a-table
-              :columns="innerColumns"
-              :data-source="record.balances"
-              :row-key="(r) => r.id"
-              :pagination="false"
-              size="small"
-              :bordered="true"
-            >
-              <template #bodyCell="{ column, record: bal }">
-                <template v-if="column.key === 'leave_type'">
-                  {{ bal.leave_type?.name || '—' }}
-                </template>
-                <template v-else-if="column.key === 'remaining'">
-                  <span class="font-semibold" :style="{ color: remainingColor(bal.remaining_days) }">
-                    {{ bal.remaining_days }}
-                  </span>
-                </template>
-                <template v-else-if="column.key === 'actions'">
-                  <a-button
-                    v-if="canAdjustBalances"
-                    size="small"
-                    type="link"
-                    @click="openAdjust(bal, record)"
-                  >
-                    Adjust
-                  </a-button>
-                </template>
+          <a-table
+            :columns="innerColumns"
+            :data-source="record.balances"
+            :row-key="(r) => r.id"
+            :pagination="false"
+            size="small"
+          >
+            <template #bodyCell="{ column, record: bal }">
+              <template v-if="column.key === 'leave_type'">
+                {{ bal.leave_type?.name || '—' }}
               </template>
-              <template #emptyText>
-                <span class="text-muted">No leave balances for this employee</span>
+              <template v-else-if="column.key === 'remaining'">
+                <span class="font-semibold" :style="{ color: remainingColor(bal.remaining_days) }">
+                  {{ bal.remaining_days }}
+                </span>
               </template>
-            </a-table>
-          </div>
+              <template v-else-if="column.key === 'actions'">
+                <a-button
+                  v-if="canAdjustBalances"
+                  size="small"
+                  type="link"
+                  @click="openAdjust(bal, record)"
+                >
+                  Adjust
+                </a-button>
+              </template>
+            </template>
+            <template #emptyText>
+              <span class="text-muted">No leave balances for this employee</span>
+            </template>
+          </a-table>
         </template>
       </a-table>
 
@@ -201,20 +195,20 @@ const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i)
 const filters = reactive({ year: currentYear, organization: undefined })
 
 const outerColumns = [
-  { title: 'Organization', key: 'organization', width: 120, align: 'center' },
-  { title: 'Employee', key: 'employee', width: 220 },
-  { title: 'Leave Types', key: 'leave_count', width: 110, align: 'center' },
-  { title: 'Total Used', key: 'total_used', width: 110, align: 'center' },
-  { title: 'Total Remaining', key: 'total_remaining', width: 130, align: 'center' },
+  { title: 'Organization', key: 'organization' },
+  { title: 'Employee', key: 'employee' },
+  { title: 'Leave Types', key: 'leave_count' },
+  { title: 'Total Used', key: 'total_used' },
+  { title: 'Total Remaining', key: 'total_remaining' },
 ]
 
 const canAdjustBalances = authStore.canUpdate('leave_balances')
 const innerColumns = [
   { title: 'Leave Type', key: 'leave_type' },
-  { title: 'Total Days', dataIndex: 'total_days', width: 110, align: 'center' },
-  { title: 'Used', dataIndex: 'used_days', width: 110, align: 'center' },
-  { title: 'Remaining', key: 'remaining', width: 110, align: 'center' },
-  ...(canAdjustBalances ? [{ title: '', key: 'actions', width: 80, align: 'right' }] : []),
+  { title: 'Total Days', dataIndex: 'total_days' },
+  { title: 'Used', dataIndex: 'used_days' },
+  { title: 'Remaining', key: 'remaining' },
+  ...(canAdjustBalances ? [{ title: '', key: 'actions' }] : []),
 ]
 
 const groupedData = computed(() => {
@@ -277,7 +271,6 @@ function onFilterChange() {
 function onPageChange(newPage, newPerPage) {
   page.value = newPage
   perPage.value = newPerPage
-  expandedKeys.value = []
 }
 
 // ── Balance Adjustment Modal ─────────────────────────────────────────────────
@@ -357,19 +350,6 @@ onMounted(() => { appStore.setPageMeta('Leave Balances'); fetchBalances() })
 .cell-employee { display: flex; flex-direction: column; }
 .cell-name { font-weight: 600; font-size: 13px; }
 .cell-sub { font-size: 12px; color: var(--color-text-muted); }
-
-.expanded-section { padding: 4px 0; }
-.expanded-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.expanded-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
 
 .balance-pagination {
   display: flex;

@@ -240,7 +240,7 @@
               <div>
                 <div class="item-label">Days</div>
                 <div class="days-display">
-                  <span class="days-value font-mono">{{ item.days ?? '—' }}</span>
+                  <span class="days-value font-mono">{{ item.days != null ? (item.daysConfirmed ? item.days : '~' + item.days) : '—' }}</span>
                   <span v-if="item.days != null" class="days-unit">working days</span>
                 </div>
               </div>
@@ -425,7 +425,7 @@ import { leaveApi } from '@/api/leaveApi'
 import { employeeApi } from '@/api/employeeApi'
 import { useAbortController } from '@/composables/useAbortController'
 import { useSaveAnother } from '@/composables/useSaveAnother'
-import { formatDate } from '@/utils/formatters'
+import { formatDate, calcWorkingDays } from '@/utils/formatters'
 import { ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
 import { siteApi } from '@/api'
 import RecordView from '@/components/common/RecordView.vue'
@@ -492,7 +492,7 @@ const { savingMain: saving, savingAnother, submitMain, submitAnother } = useSave
 })
 const employeeSelectRef = ref(null)
 
-const defaultItem = () => ({ leave_type_id: undefined, start_date: null, end_date: null, days: null })
+const defaultItem = () => ({ leave_type_id: undefined, start_date: null, end_date: null, days: null, daysConfirmed: false })
 
 const defaultForm = () => ({
   employee_id: undefined,
@@ -640,11 +640,15 @@ async function fetchAllBalances() {
 async function onItemDateChange(index) {
   const item = form.items[index]
   item.days = null
+  item.daysConfirmed = false
   if (!item.start_date || !item.end_date) return
+  // Instant client-side estimate (weekdays only, no holidays)
+  item.days = calcWorkingDays(item.start_date, item.end_date)
   try {
     const { data } = await leaveApi.calculateDays({ start_date: item.start_date, end_date: item.end_date })
-    item.days = data?.data?.working_days ?? null
-  } catch { /* silent */ }
+    item.days = data?.data?.working_days ?? item.days
+    item.daysConfirmed = true
+  } catch { /* keep client-side estimate */ }
 }
 
 function getDerivedDateRange() {
@@ -741,6 +745,7 @@ function openEdit(record) {
         start_date: record.start_date || null,
         end_date: record.end_date || null,
         days: i.days,
+        daysConfirmed: i.days != null,
       }))
     : [defaultItem()]
   form.supervisor_approved = record.supervisor_approved || false

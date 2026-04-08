@@ -159,7 +159,8 @@ const sessionConflictMessage = ref('')
 const sessionExpired = computed(() => route.query.reason === 'session-expired')
 
 function dismissSessionExpired() {
-  router.replace({ ...route, query: { ...route.query, reason: undefined } })
+  const { reason: _removed, ...rest } = route.query
+  router.replace({ name: 'login', query: rest })
 }
 
 async function handleLogin() {

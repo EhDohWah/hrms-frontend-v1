@@ -160,6 +160,11 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <div v-if="hoursWorked" class="date-feedback" :class="{ 'date-feedback--warning': hoursWorked.hours >= 16 }">
+          <span v-if="hoursWorked.isOvernight">Overnight: </span>
+          <span class="font-mono">{{ hoursWorked.hours }}h {{ String(hoursWorked.minutes).padStart(2, '0') }}m</span>
+          <span v-if="hoursWorked.hours >= 16"> — Unusually long shift</span>
+        </div>
         <a-form-item label="Notes">
           <a-textarea v-model:value="form.notes" placeholder="Enter notes" :rows="2" />
         </a-form-item>
@@ -183,7 +188,7 @@ import { attendanceApi, employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
 import { useSaveAnother } from '@/composables/useSaveAnother'
 import { ORG_OPTIONS, getOrgColor } from '@/constants/organizations'
-import { formatDate } from '@/utils/formatters'
+import { formatDate, calcHoursWorked } from '@/utils/formatters'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -217,6 +222,8 @@ const employees = ref([])
 const employeesLoading = ref(false)
 const employeeSearchQuery = ref('')
 let employeeSearchTimer = null
+
+const hoursWorked = computed(() => calcHoursWorked(form.clock_in, form.clock_out))
 
 const columns = [
   { title: 'Organization', key: 'organization', width: 110, align: 'center' },

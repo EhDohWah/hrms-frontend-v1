@@ -1,6 +1,5 @@
 import { ref, nextTick } from 'vue'
 import { userApi } from '@/api'
-import { useAuthStore } from '@/stores/auth'
 
 // Module-level cache — lives for the page session, avoids redundant API calls.
 // Must be reset on logout to prevent leaking between user sessions.
@@ -23,15 +22,12 @@ export function resetTourCache() {
  * @param {string} tourKey - Unique identifier stored in user_tours table
  */
 export function useTour(tourKey) {
-  const authStore = useAuthStore()
   const isTourOpen = ref(false)
   const currentStep = ref(0)
   let openTimer = null
 
   async function checkAndOpen() {
     try {
-      if (authStore.needsPasswordChange) return
-
       if (completedKeysCache === null) {
         const { data } = await userApi.completedTours()
         completedKeysCache = data.data

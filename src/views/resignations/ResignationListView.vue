@@ -144,6 +144,9 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <div v-if="resignationHint" class="date-feedback" :class="'date-feedback--' + resignationHint.level">
+          {{ resignationHint.text }}
+        </div>
         <a-form-item label="Notes">
           <a-textarea v-model:value="form.notes" placeholder="Notes (optional)" :rows="3" />
         </a-form-item>
@@ -197,7 +200,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
 import { useSaveAnother } from '@/composables/useSaveAnother'
 import { resignationApi, departmentApi, employeeApi } from '@/api'
-import { formatDate } from '@/utils/formatters'
+import { formatDate, formatResignationHint } from '@/utils/formatters'
 import { getOrgColor } from '@/constants/organizations'
 import { getResignationApprovalStatus, ACKNOWLEDGEMENT_OPTIONS, booleanToAcknowledgement, buildResignationPayload } from '@/constants/resignations'
 
@@ -229,6 +232,8 @@ const form = reactive({
   supervisorStatus: 'pending', supervisor_approved_at: null,
   hrStatus: 'pending', hr_manager_approved_at: null,
 })
+
+const resignationHint = computed(() => formatResignationHint(form.resignation_date, form.last_working_date))
 
 const columns = computed(() => [
   { title: 'Employee', key: 'employee', width: 220 },

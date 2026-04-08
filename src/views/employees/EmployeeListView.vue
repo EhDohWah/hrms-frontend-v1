@@ -64,6 +64,52 @@
 
     <!-- Table (desktop) -->
     <a-card :body-style="{ padding: 0 }" class="hidden-mobile">
+      <!-- Column customization toolbar -->
+      <div class="column-toolbar">
+        <span class="column-toolbar-label">
+          {{ columnVisibleKeys.length }} of {{ columnOptions.length }} columns
+        </span>
+        <a-popover
+          v-model:open="columnPopoverOpen"
+          trigger="click"
+          placement="bottomRight"
+          overlay-class-name="column-popover"
+        >
+          <template #content>
+            <div class="column-popover-body">
+              <div class="column-popover-header">
+                <span class="column-popover-title">Show columns</span>
+                <a-button
+                  v-if="columnsCustomized"
+                  type="link"
+                  size="small"
+                  class="column-reset-btn"
+                  @click="resetColumns"
+                >
+                  <ReloadOutlined /> Reset
+                </a-button>
+              </div>
+              <a-checkbox-group
+                :value="columnVisibleKeys"
+                class="column-checkbox-group"
+                @change="setColumnVisibleKeys"
+              >
+                <div
+                  v-for="opt in columnOptions"
+                  :key="opt.value"
+                  class="column-checkbox-item"
+                >
+                  <a-checkbox :value="opt.value">{{ opt.label }}</a-checkbox>
+                </div>
+              </a-checkbox-group>
+            </div>
+          </template>
+          <a-button size="small" class="column-settings-btn">
+            <SettingOutlined /> Columns
+          </a-button>
+        </a-popover>
+      </div>
+
       <a-table
         :columns="columns"
         :data-source="employees"
@@ -247,12 +293,14 @@ import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { employeeApi } from '@/api'
 import { useAbortController } from '@/composables/useAbortController'
+import { useColumnCustomization } from '@/composables/useColumnCustomization'
 import { formatDate, formatCurrency, genderLabel, calcAge, fmtFte } from '@/utils/formatters'
 import { ORGANIZATIONS, ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
 import { EMPLOYEE_STATUSES, STATUS_COLOR_MAP } from '@/constants/employeeStatuses'
 import {
   SearchOutlined, PlusOutlined, ExclamationCircleOutlined,
   TeamOutlined, LogoutOutlined, UserAddOutlined,
+  SettingOutlined, ReloadOutlined,
 } from '@ant-design/icons-vue'
 import RecordView from '@/components/common/RecordView.vue'
 
@@ -295,9 +343,9 @@ const sortFieldMap = {
   id_type: 'identification_type',
 }
 
-const columns = computed(() => [
-  { title: 'Organization', key: 'organization', width: 120, fixed: 'left', sorter: true, sortOrder: sortField.value === 'organization' ? sortOrder.value : null },
-  { title: 'Staff ID', key: 'staff_id', width: 110, fixed: 'left', sorter: true, sortOrder: sortField.value === 'staff_id' ? sortOrder.value : null },
+const allColumns = computed(() => [
+  { title: 'Organization', key: 'organization', width: 120, sorter: true, sortOrder: sortField.value === 'organization' ? sortOrder.value : null },
+  { title: 'Staff ID', key: 'staff_id', width: 110, sorter: true, sortOrder: sortField.value === 'staff_id' ? sortOrder.value : null },
   { title: 'Initial', key: 'initial', width: 65, align: 'center' },
   { title: 'First Name', key: 'first_name', width: 160, sorter: true, sortOrder: sortField.value === 'first_name' ? sortOrder.value : null },
   { title: 'Last Name', key: 'last_name', width: 140, sorter: true, sortOrder: sortField.value === 'last_name' ? sortOrder.value : null },
@@ -306,14 +354,29 @@ const columns = computed(() => [
   { title: 'Age', key: 'age', width: 60, align: 'center', sorter: true, sortOrder: sortField.value === 'age' ? sortOrder.value : null },
   { title: 'Department', key: 'department', width: 160, ellipsis: true },
   { title: 'Position', key: 'position', width: 160, ellipsis: true },
-  { title: 'Employee Status', key: 'status', width: 150, sorter: true, sortOrder: sortField.value === 'status' ? sortOrder.value : null, ellipsis: true},
+  { title: 'Employee Status', key: 'status', width: 150, sorter: true, sortOrder: sortField.value === 'status' ? sortOrder.value : null, ellipsis: true },
   { title: 'ID Type', key: 'id_type', width: 130, sorter: true, sortOrder: sortField.value === 'id_type' ? sortOrder.value : null },
   { title: 'ID Number', key: 'id_number', width: 140 },
-  { title: 'Social Security Number', key: 'ssn', width: 140, ellipsis: true},
+  { title: 'Social Security Number', key: 'ssn', width: 140, ellipsis: true },
   { title: 'Tax No.', key: 'tax_no', width: 120 },
   { title: 'Mobile', key: 'mobile', width: 130 },
   { title: '', key: 'actions', width: 80, align: 'right', fixed: 'right' },
 ])
+
+const DEFAULT_VISIBLE_KEYS = [
+  'organization', 'staff_id', 'first_name', 'last_name', 'department', 'status',
+]
+
+const {
+  visibleColumns: columns,
+  visibleKeys: columnVisibleKeys,
+  columnOptions,
+  isCustomized: columnsCustomized,
+  setVisibleKeys: setColumnVisibleKeys,
+  resetToDefault: resetColumns,
+} = useColumnCustomization('employee_list_columns', allColumns, DEFAULT_VISIBLE_KEYS)
+
+const columnPopoverOpen = ref(false)
 
 const tablePagination = computed(() => ({
   current: pagination.current_page,
@@ -823,6 +886,33 @@ onMounted(() => {
   justify-content: center;
 }
 
+/* ── Column Customization Toolbar ── */
+.column-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.column-toolbar-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.column-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.column-settings-btn:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
 /* ── Record View Modal ── */
 .view-loading-state {
   display: flex;
@@ -862,6 +952,58 @@ onMounted(() => {
 .view-close-btn:focus-visible {
   outline: 2px solid rgba(255,255,255,0.6);
   outline-offset: 2px;
+}
+</style>
+
+<!-- Unscoped: Column popover styles (renders in portal) -->
+<style>
+.column-popover .ant-popover-inner {
+  padding: 0;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+.column-popover-body {
+  width: 220px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.column-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.column-popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.column-reset-btn {
+  font-size: 12px;
+  padding: 0 4px;
+  height: auto;
+  color: var(--color-accent);
+}
+.column-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  width: 100%;
+}
+.column-checkbox-item {
+  padding: 5px 14px;
+  transition: background var(--transition-fast);
+}
+.column-checkbox-item:hover {
+  background: var(--color-bg-hover);
+}
+.column-checkbox-item .ant-checkbox-wrapper {
+  font-size: 13px;
+  color: var(--color-text);
+  width: 100%;
 }
 </style>
 

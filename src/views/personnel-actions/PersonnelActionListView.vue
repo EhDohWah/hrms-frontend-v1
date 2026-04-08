@@ -186,6 +186,9 @@
                   format="DD MMM YYYY"
                   value-format="YYYY-MM-DD"
                 />
+                <div v-if="effectiveDateContext" class="date-feedback" :class="{ 'date-feedback--warning': Math.abs(effectiveDateContext.days) > 365 }">
+                  {{ effectiveDateContext.label }}
+                </div>
               </a-form-item>
             </a-col>
           </a-row>
@@ -396,7 +399,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAbortController } from '@/composables/useAbortController'
 import { useSaveAnother } from '@/composables/useSaveAnother'
 import { personnelActionApi, employeeApi, employmentApi, optionsApi } from '@/api'
-import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters'
+import { formatCurrency, formatNumber, formatDate, calcDaysFromToday } from '@/utils/formatters'
 import { cleanParams } from '@/utils/helpers'
 import { PAGINATION_DEFAULTS } from '@/constants/config'
 
@@ -463,6 +466,8 @@ const form = reactive({
   hr_approved_date: null,
   accountant_approved_date: null,
 })
+
+const effectiveDateContext = computed(() => calcDaysFromToday(form.effective_date))
 
 // Selection
 const selectedRowKeys = ref([])

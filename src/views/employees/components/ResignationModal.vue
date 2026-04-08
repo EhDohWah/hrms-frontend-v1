@@ -30,6 +30,9 @@
           </a-form-item>
         </a-col>
       </a-row>
+      <div v-if="resignationHint" class="date-feedback" :class="'date-feedback--' + resignationHint.level">
+        {{ resignationHint.text }}
+      </div>
       <a-form-item label="Notes">
         <a-textarea v-model:value="form.notes" placeholder="Notes (optional)" :rows="3" />
       </a-form-item>
@@ -75,11 +78,12 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { resignationApi } from '@/api'
 import { useSaveAnother } from '@/composables/useSaveAnother'
 import { ACKNOWLEDGEMENT_OPTIONS, buildResignationPayload } from '@/constants/resignations'
+import { formatResignationHint } from '@/utils/formatters'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -92,6 +96,8 @@ const { savingMain, savingAnother, submitMain, submitAnother } = useSaveAnother(
   refresh: () => emit('submitted'),
   reset: resetForm,
 })
+
+const resignationHint = computed(() => formatResignationHint(form.resignation_date, form.last_working_date))
 
 const form = reactive({
   resignation_date: null,

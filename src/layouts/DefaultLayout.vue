@@ -19,11 +19,11 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-import { message } from 'ant-design-vue'
 import { useAppStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import { subscribeUserChannels, destroyEcho } from '@/plugins/echo'
+import { useNotification } from '@/composables/useNotification'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import PasswordChangeWarningModal from '@/components/layout/PasswordChangeWarningModal.vue'
@@ -32,8 +32,14 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const notifStore = useNotificationStore()
 
+const notify = useNotification()
+
+let lastPermissionDeniedAt = 0
 function handlePermissionDenied(event) {
-  message.warning(event.detail?.message || 'You do not have permission to access this resource.')
+  const now = Date.now()
+  if (now - lastPermissionDeniedAt < 1000) return
+  lastPermissionDeniedAt = now
+  notify.warning(event.detail?.message || 'You do not have permission to access this resource.')
 }
 
 onMounted(async () => {

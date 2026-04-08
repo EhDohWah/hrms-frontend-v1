@@ -23,6 +23,16 @@
 
     <div class="pw-divider" />
 
+    <a-alert
+      v-if="errorMessage"
+      type="error"
+      :message="errorMessage"
+      show-icon
+      closable
+      class="pw-error-alert"
+      @close="errorMessage = ''"
+    />
+
     <a-form
       layout="vertical"
       :model="form"
@@ -118,6 +128,7 @@ import PasswordRequirements from '@/components/common/PasswordRequirements.vue'
 const authStore = useAuthStore()
 const loading = ref(false)
 const showSuccess = ref(false)
+const errorMessage = ref('')
 let successTimer = null
 
 const form = reactive({
@@ -138,6 +149,7 @@ const primaryRole = computed(() => {
 
 async function handleSubmit() {
   loading.value = true
+  errorMessage.value = ''
   try {
     await userApi.updatePassword(form)
 
@@ -155,9 +167,9 @@ async function handleSubmit() {
     const resp = err.response?.data
     if (resp?.errors) {
       const firstErr = Object.values(resp.errors)[0]
-      message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
+      errorMessage.value = Array.isArray(firstErr) ? firstErr[0] : firstErr
     } else {
-      message.error(resp?.message || 'Failed to change password')
+      errorMessage.value = resp?.message || 'Failed to change password'
     }
   } finally {
     loading.value = false
@@ -212,6 +224,11 @@ onUnmounted(() => {
   height: 1px;
   background: var(--color-border);
   margin: 16px -28px 20px;
+}
+
+.pw-error-alert {
+  margin-bottom: 16px;
+  border-radius: var(--radius-md);
 }
 
 .pw-form {

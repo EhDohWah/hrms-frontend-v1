@@ -424,7 +424,8 @@ onMounted(() => appStore.setPageMeta('My Profile'))
 
 .profile-avatar-area {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   margin-bottom: 16px;
   padding-top: 8px;
 }

@@ -335,15 +335,10 @@ const tourSteps = computed(() => {
     steps.push(
       { title: 'System Health', description: 'Live status of your database, cache, storage, and job queue. Green means healthy, yellow means degraded, red means down. Click any row for details.', target: el('widget-admin'), placement: 'bottom' },
     )
-    // Recent Errors and Failed Jobs only show if the cards are in the DOM
-    const errEl = document.querySelector('[data-tour="widget-errors"]')
-    if (errEl) {
-      steps.push({ title: 'Recent Errors', description: 'Application errors from the last 24 hours. Spot recurring issues before users report them.', target: () => errEl, placement: 'right' })
-    }
-    const jobEl = document.querySelector('[data-tour="widget-jobs"]')
-    if (jobEl) {
-      steps.push({ title: 'Failed Jobs', description: 'Background jobs that failed — payroll processing, data imports. Retry or investigate from here.', target: () => jobEl, placement: 'left' })
-    }
+    steps.push(
+      { title: 'Recent Errors', description: 'Application errors from the last 24 hours. Spot recurring issues before users report them.', target: el('widget-errors'), placement: 'right' },
+      { title: 'Failed Jobs', description: 'Background jobs that failed — payroll processing, data imports. Retry or investigate from here.', target: el('widget-jobs'), placement: 'left' },
+    )
   } else {
     // HR Manager dashboard tour
     if (quickStats.value.length) {
@@ -435,7 +430,9 @@ function refreshStats() {
 onMounted(async () => {
   appStore.setPageMeta('Dashboard')
   await fetchQuickStats()
-  checkAndOpen()
+  if (!auth.needsPasswordChange) {
+    checkAndOpen()
+  }
 })
 </script>
 

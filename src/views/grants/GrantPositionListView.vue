@@ -38,17 +38,15 @@
     <a-card :body-style="{ padding: 0 }">
       <a-table
         :columns="columns"
-        :data-source="flatRows"
+        :data-source="filteredGrants"
         :loading="loading"
         :pagination="false"
-        :row-key="(r) => r._rowKey"
-        :scroll="{ x: 'max-content' }"
+        row-key="grant_id"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'grant_code'">
             <router-link
-              v-if="record._isFirst"
               :to="{ name: 'grant-detail', params: { id: record.grant_id } }"
               class="cell-code font-mono"
             >
@@ -56,42 +54,28 @@
             </router-link>
           </template>
 
-          <template v-else-if="column.key === 'grant_name'">
-            <span v-if="record._isFirst">{{ record.grant_name }}</span>
+          <template v-else-if="column.key === 'total_manpower'">
+            <span class="cell-number">{{ record.total_manpower }}</span>
           </template>
 
-          <template v-else-if="column.key === 'budgetline_code'">
-            <a-tag v-if="record.budgetline_code" color="blue" size="small">{{ record.budgetline_code }}</a-tag>
-            <span v-else class="text-muted">—</span>
-          </template>
-
-          <template v-else-if="column.key === 'manpower'">
-            <span class="cell-number">{{ record.manpower }}</span>
-          </template>
-
-          <template v-else-if="column.key === 'recruited'">
-            <a-tag v-if="record.recruited > 0" color="green" size="small">{{ record.recruited }}</a-tag>
+          <template v-else-if="column.key === 'total_recruited'">
+            <a-tag v-if="record.total_recruited > 0" color="green" size="small">{{ record.total_recruited }}</a-tag>
             <span v-else class="text-muted">0</span>
           </template>
 
-          <template v-else-if="column.key === 'finding'">
-            <a-tag v-if="record.finding > 0" color="orange" size="small">{{ record.finding }}</a-tag>
+          <template v-else-if="column.key === 'total_finding'">
+            <a-tag v-if="record.total_finding > 0" color="orange" size="small">{{ record.total_finding }}</a-tag>
             <span v-else class="text-muted">0</span>
           </template>
 
           <template v-else-if="column.key === 'status'">
-            <a-tag
-              v-if="record._isFirst"
-              :color="statusColorMap[record.status] || 'default'"
-              size="small"
-            >
+            <a-tag :color="statusColorMap[record.status] || 'default'" size="small">
               {{ record.status }}
             </a-tag>
           </template>
 
           <template v-else-if="column.key === 'actions'">
             <a-button
-              v-if="record._isFirst"
               size="small"
               type="link"
               @click="$router.push({ name: 'grant-detail', params: { id: record.grant_id } })"
@@ -99,6 +83,38 @@
               View
             </a-button>
           </template>
+        </template>
+
+        <!-- Nested table: grant positions -->
+        <template #expandedRowRender="{ record }">
+          <a-table
+            :columns="innerColumns"
+            :data-source="record.positions || []"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record: pos }">
+              <template v-if="column.key === 'budgetline_code'">
+                <a-tag v-if="pos.budgetline_code" color="blue" size="small">{{ pos.budgetline_code }}</a-tag>
+                <span v-else class="text-muted">—</span>
+              </template>
+
+              <template v-else-if="column.key === 'manpower'">
+                <span class="cell-number">{{ pos.manpower }}</span>
+              </template>
+
+              <template v-else-if="column.key === 'recruited'">
+                <a-tag v-if="pos.recruited > 0" color="green" size="small">{{ pos.recruited }}</a-tag>
+                <span v-else class="text-muted">0</span>
+              </template>
+
+              <template v-else-if="column.key === 'finding'">
+                <a-tag v-if="pos.finding > 0" color="orange" size="small">{{ pos.finding }}</a-tag>
+                <span v-else class="text-muted">0</span>
+              </template>
+            </template>
+          </a-table>
         </template>
       </a-table>
       <div v-if="pagination.total > 0" class="grant-pagination">
@@ -141,67 +157,33 @@ const statusColorMap = {
   Completed: 'green',
 }
 
+// Outer table columns — grant-level info
 const columns = [
-  { title: 'Grant Code', key: 'grant_code', width: 130 },
-  { title: 'Grant Name', key: 'grant_name', width: 180, ellipsis: true },
-  { title: 'Budget Line', key: 'budgetline_code', width: 130 },
-  { title: 'Grant Position', dataIndex: 'position', width: 180, ellipsis: true },
-  { title: 'ManPower', key: 'manpower', width: 100, align: 'center' },
-  { title: 'Recruited', key: 'recruited', width: 100, align: 'center' },
-  { title: 'Finding', key: 'finding', width: 100, align: 'center' },
-  { title: 'Status', key: 'status', width: 110, align: 'center' },
-  { title: '', key: 'actions', width: 80, align: 'right' },
+  { title: 'Grant Code', key: 'grant_code', dataIndex: 'grant_code' },
+  { title: 'Grant Name', key: 'grant_name', dataIndex: 'grant_name', ellipsis: true },
+  { title: 'ManPower', key: 'total_manpower', dataIndex: 'total_manpower', align: 'center' },
+  { title: 'Recruited', key: 'total_recruited', dataIndex: 'total_recruited', align: 'center' },
+  { title: 'Finding', key: 'total_finding', dataIndex: 'total_finding', align: 'center' },
+  { title: 'Status', key: 'status', dataIndex: 'status', align: 'center' },
+  { title: '', key: 'actions', align: 'right' },
 ]
 
-// Flatten API data: each grant position becomes one row, with grant info merged in
-const flatRows = computed(() => {
-  const rows = []
-  const filtered = statusFilter.value
-    ? rawData.value.filter((g) => g.status === statusFilter.value)
-    : rawData.value
+// Inner table columns — position-level info
+const innerColumns = [
+  { title: 'Position', key: 'position', dataIndex: 'position' },
+  { title: 'Budget Line', key: 'budgetline_code', dataIndex: 'budgetline_code' },
+  { title: 'ManPower', key: 'manpower', dataIndex: 'manpower', align: 'center' },
+  { title: 'Recruited', key: 'recruited', dataIndex: 'recruited', align: 'center' },
+  { title: 'Finding', key: 'finding', dataIndex: 'finding', align: 'center' },
+]
 
-  for (const grant of filtered) {
-    const positions = grant.positions || []
-    if (positions.length === 0) {
-      // Grant with no positions — show one summary row
-      rows.push({
-        _rowKey: `g-${grant.grant_id}`,
-        _isFirst: true,
-        grant_id: grant.grant_id,
-        grant_code: grant.grant_code,
-        grant_name: grant.grant_name,
-        budgetline_code: null,
-        position: '—',
-        manpower: grant.total_manpower,
-        recruited: grant.total_recruited,
-        finding: grant.total_finding,
-        status: grant.status,
-      })
-    } else {
-      positions.forEach((pos, idx) => {
-        rows.push({
-          _rowKey: `p-${pos.id}`,
-          _isFirst: idx === 0,
-          grant_id: grant.grant_id,
-          grant_code: grant.grant_code,
-          grant_name: grant.grant_name,
-          budgetline_code: pos.budgetline_code,
-          position: pos.position || '—',
-          manpower: pos.manpower,
-          recruited: pos.recruited,
-          finding: pos.finding,
-          status: grant.status,
-        })
-      })
-    }
-  }
-  return rows
+const filteredGrants = computed(() => {
+  if (!statusFilter.value) return rawData.value
+  return rawData.value.filter((g) => g.status === statusFilter.value)
 })
 
 const totals = computed(() => {
-  const src = statusFilter.value
-    ? rawData.value.filter((g) => g.status === statusFilter.value)
-    : rawData.value
+  const src = filteredGrants.value
   return {
     manpower: src.reduce((s, g) => s + (g.total_manpower || 0), 0),
     recruited: src.reduce((s, g) => s + (g.total_recruited || 0), 0),

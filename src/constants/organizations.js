@@ -1,6 +1,6 @@
 export const ORGANIZATIONS = {
-  SMRU: { code: 'SMRU', label: 'SMRU', fullName: 'Shoklo Malaria Research Unit', color: 'blue' },
-  BHF: { code: 'BHF', label: 'BHF', fullName: 'Borderland Health Foundation', color: 'green' },
+  SMRU: { code: 'SMRU', label: 'SMRU', fullName: 'Shoklo Malaria Research Unit', color: '#002147' },
+  BHF: { code: 'BHF', label: 'BHF', fullName: 'Borderland Health Foundation', color: 'blue' },
 }
 
 export const ORG_OPTIONS = Object.values(ORGANIZATIONS)

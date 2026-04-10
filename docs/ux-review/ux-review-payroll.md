@@ -22,7 +22,7 @@
 
 ## 2. The Core Tension
 
-The payroll table tries to be a summary dashboard and a detailed spreadsheet at the same time, and achieves neither well. The outer table provides useful grouping, but the inner table's 29 columns of financial data create a horizontal scrolling experience that makes it nearly impossible to compare values across employees or even across allocations within the same employee. The detail drawer already solves this problem beautifully for individual records -- but the main table doesn't acknowledge that the drawer exists. Instead, it duplicates all the same data in a less readable format.
+The payroll table tries to be a summary dashboard and a detailed spreadsheet at the same time, and achieves neither well. The outer table provides useful grouping, but the inner table's 28 columns of financial data create a horizontal scrolling experience that makes it nearly impossible to compare values across employees or even across allocations within the same employee. The detail drawer already solves this problem beautifully for individual records -- but the main table doesn't acknowledge that the drawer exists. Instead, it duplicates all the same data in a less readable format.
 
 ---
 
@@ -32,15 +32,15 @@ The payroll table tries to be a summary dashboard and a detailed spreadsheet at 
 
 **Today:** The administrator logs in and navigates to the Payroll page. They see the standard view with a list of employee rows grouped by pay period. They set the Pay Period filter to last month and maybe filter by organization. Now they have a list of employees with Record counts and Total Net amounts. To check the details for a specific employee, they click the expand arrow on that row.
 
-A 29-column table explodes horizontally inside the row. The grant code and grant name are visible at the left edge, but every monetary field -- Gross, Gross by FTE, Retroactive, 13th Month, 13th Accrued, Salary Increase, PVD Employee, PVD Employer, SF Employee, SF Employer, Employee SSF, Employer SSF, Employee H/W, Employer H/W, Tax, Student Loan, Total Salary, Total Income, Employer Contribution, Total Deduction, Net Salary, Notes, and Actions -- stretches far to the right. The user scrolls right to find Net Salary, losing sight of which grant code they're looking at because the fixed left column only pins Grant Code. They scroll back to check the grant, then scroll right again to check Tax. This back-and-forth is the tax paid on every detail check.
+A 28-column table explodes horizontally inside the row. The grant code and grant name are visible at the left edge, but every monetary field -- Gross, Gross by FTE, Retroactive, 13th Month, 13th Accrued, Salary Increase, PVD Employee, PVD Employer, SF Employee, SF Employer, Employee SSF, Employer SSF, Employee H/W, Employer H/W, Tax, Student Loan, Total Salary, Total Income, Employer Contribution, Total Deduction, Net Salary, Notes, and Actions -- stretches far to the right. The user scrolls right to find Net Salary, losing sight of which grant code they're looking at because the fixed left column only pins Grant Code. They scroll back to check the grant, then scroll right again to check Tax. This back-and-forth is the tax paid on every detail check.
 
 They click "View" to open the detail drawer. Suddenly the same data is presented beautifully: a clean 9-column summary table with expandable breakdowns in a three-column grid. The drawer is where understanding happens. The table is where confusion lives.
 
-To check another employee, they close the drawer, collapse the expanded row, find the next employee, expand it, and either squint at 29 columns or click "View" again. For 10 employees, that's 10 expand-collapse-view cycles.
+To check another employee, they close the drawer, collapse the expanded row, find the next employee, expand it, and either squint at 28 columns or click "View" again. For 10 employees, that's 10 expand-collapse-view cycles.
 
 **What it should feel like:** The administrator opens the Payroll page, sets their filters, and sees a clean summary table with the 6-7 columns that matter at a glance: Employee, Organization, Department, Pay Period, Records, Total Deductions, and Net Salary. Clicking any employee row opens the detail drawer immediately -- no intermediate nested table to scroll through. The drawer is the drill-down, and the table is the scan. If the administrator needs the full spreadsheet view, a toggle or column picker lets them opt into the dense view. But the default respects the most common task: scanning the summary, then spotting-checking a few employees in detail.
 
-**The gap:** Today, every detail check forces the user through a 29-column horizontal scroll or a two-step expand-then-view flow. The information architecture treats every financial field as equally important for scanning, when in practice, 80% of the time the user only needs 5-6 summary columns.
+**The gap:** Today, every detail check forces the user through a 28-column horizontal scroll or a two-step expand-then-view flow. The information architecture treats every financial field as equally important for scanning, when in practice, 80% of the time the user only needs 5-6 summary columns.
 
 ### Payroll Administrator: "Run this month's payroll"
 
@@ -64,9 +64,9 @@ This is powerful but has a subtle problem: the main toolbar filters (Organizatio
 
 ## 4. What to Cut
 
-### The 29-column inline nested table (demote, don't delete)
+### The 28-column inline nested table (demote, don't delete)
 
-**What it is:** When a user expands an employee row in the Standard view, a second table appears inline with 29 columns covering every monetary field from Gross Salary to Notes to Actions.
+**What it is:** When a user expands an employee row in the Standard view, a second table appears inline with 28 columns covering every monetary field from Gross Salary to Notes to Actions.
 
 **Why it should be demoted:** The detail drawer already presents the same data in a far more readable format. The inline table creates horizontal scroll that makes it impossible to correlate Grant Code (left edge) with Net Salary (far right). Users who need the full spreadsheet layout can be served by an export function; users who need to spot-check are better served by the drawer.
 
@@ -92,7 +92,7 @@ This is powerful but has a subtle problem: the main toolbar filters (Organizatio
 
 **What the user would see:** A small gear or columns icon in the table header area. Clicking it reveals a checklist of all available columns. The user checks the ones they want to see. Their selection persists across sessions (via localStorage or user preferences).
 
-**Why it matters:** Different roles need different columns. A finance officer checking deductions doesn't need Grant Position or BL Code. A grant manager tracking FTE allocation doesn't need PVD Employer or Student Loan. Right now, everyone gets all 29 columns. A few saved column profiles ("Finance View," "Grant View," "Summary") would eliminate 70% of the horizontal scrolling.
+**Why it matters:** Different roles need different columns. A finance officer checking deductions doesn't need Grant Position or BL Code. A grant manager tracking FTE allocation doesn't need PVD Employer or Student Loan. Right now, everyone gets all 28 columns. A few saved column profiles ("Finance View," "Grant View," "Summary") would eliminate 70% of the horizontal scrolling.
 
 **Impact:** Transforms the daily scanning workflow. Instead of scrolling through irrelevant columns, each role sees exactly the data they use.
 
@@ -136,7 +136,7 @@ Ordered by how much daily friction is removed, for the most users, most often:
 
 ### Priority 1: Simplify the nested table (Option A or B from section 4)
 
-This affects every user, every time they use the payroll page. The 29-column nested table is the primary source of friction in the module. Either eliminate it in favor of direct-to-drawer (Option A) or slim it to 5-6 key columns (Option B). This single change would transform the payroll page from feeling like a spreadsheet that escaped Excel into a purpose-built payroll management interface.
+This affects every user, every time they use the payroll page. The 28-column nested table is the primary source of friction in the module. Either eliminate it in favor of direct-to-drawer (Option A) or slim it to 5-6 key columns (Option B). This single change would transform the payroll page from feeling like a spreadsheet that escaped Excel into a purpose-built payroll management interface.
 
 ### Priority 2: Add table sorting to the outer table
 
@@ -144,7 +144,7 @@ Zero-cost improvement in terms of UX complexity (users already expect sortable c
 
 ### Priority 3: Add column visibility controls (if keeping the detailed nested table)
 
-If Option B is chosen (slim nested table with optional full view), column visibility controls let power users access the full 29 columns when they need them without forcing it on everyone by default. If Option A is chosen (drawer-only), this becomes less critical.
+If Option B is chosen (slim nested table with optional full view), column visibility controls let power users access the full 28 columns when they need them without forcing it on everyone by default. If Option A is chosen (drawer-only), this becomes less critical.
 
 ### Priority 4: Merge wizard steps 0 and 1
 

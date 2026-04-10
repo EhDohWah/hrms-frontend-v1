@@ -8,7 +8,7 @@
 
 **The priority ordering is correct.** The plan leads with the single change that affects every user on every visit -- simplifying the nested table -- and ends with a backend-dependent feature that serves a narrower use case. This is exactly the right instinct: fix what the most people hit the most often first.
 
-**Phase 1 (slim the inner table) is the highest-leverage change in the entire plan.** Right now, expanding an employee row reveals a wall of 29 financial columns that forces horizontal scrolling just to see Net Salary. The proposed 6-column slim table -- Grant Code, FTE, Gross by FTE, Total Deductions, Net Salary, Action -- captures the three questions a payroll administrator actually asks when scanning: "Which grant? How much of their time? What's the net?" Everything else is a drill-down question, and the detail drawer already answers those beautifully with its three-column Income/Deductions/Employer breakdown grid.
+**Phase 1 (slim the inner table) is the highest-leverage change in the entire plan.** Right now, expanding an employee row reveals a wall of 28 financial columns that forces horizontal scrolling just to see Net Salary. The proposed 6-column slim table -- Grant Code, FTE, Gross by FTE, Total Deductions, Net Salary, Action -- captures the three questions a payroll administrator actually asks when scanning: "Which grant? How much of their time? What's the net?" Everything else is a drill-down question, and the detail drawer already answers those beautifully with its three-column Income/Deductions/Employer breakdown grid.
 
 **Phase 4 (merging wizard steps) correctly identifies a false sense of complexity.** Picking a date and picking an organization are not separate decisions -- they're one thought: "Run payroll for SMRU on March 25th." Two screens for two fields creates a click tax on every single payroll run. Combining them into one "Configure" step respects how the administrator actually thinks.
 
@@ -35,7 +35,7 @@ The plan currently hedges: it slims the table AND makes rows clickable to open t
 ### Payroll Administrator Checking Last Month's Payroll
 
 **Today (before plan):**
-The administrator opens the Payroll page, sets the Pay Period filter to last month, and sees employee rows. They need to check the tax deduction for a specific employee. They click the expand arrow. A 29-column table explodes horizontally. They scroll right past Gross, Gross by FTE, Retroactive, 13th Month, 13th Accrued, Salary Increase, PVD Employee, PVD Employer, SF Employee, SF Employer... finally reaching Tax. But now they can't see which grant they're looking at because Grant Code scrolled off the left edge. They scroll back. They scroll forward again. For one number. Then they close the expansion, find the next employee, and repeat.
+The administrator opens the Payroll page, sets the Pay Period filter to last month, and sees employee rows. They need to check the tax deduction for a specific employee. They click the expand arrow. A 28-column table explodes horizontally. They scroll right past Gross, Gross by FTE, Retroactive, 13th Month, 13th Accrued, Salary Increase, PVD Employee, PVD Employer, SF Employee, SF Employer... finally reaching Tax. But now they can't see which grant they're looking at because Grant Code scrolled off the left edge. They scroll back. They scroll forward again. For one number. Then they close the expansion, find the next employee, and repeat.
 
 **After Phase 1 (slim table):**
 Same scenario. They click expand. Six columns appear: Grant Code, FTE, Gross by FTE, Total Deductions, Net Salary, Action. No horizontal scroll. They see the total deduction amount at a glance. If they need the specific tax breakdown, they click the row (or "View") and the detail drawer slides in with Income, Deductions, and Employer columns side by side. They find Tax instantly. They close the drawer, collapse the row, move to the next employee.
@@ -86,6 +86,12 @@ This is a mismatch between what the user sees (grouped rows with summed totals) 
 The plan says to put the Columns button "in the toolbar row, perhaps next to the view mode radio group." But the column picker affects the **inner** table, not the outer table. Placing it in the main toolbar -- which visually belongs to the outer table and page-level filters -- creates a spatial disconnect. The user changes a setting "up here" and the effect happens "down there, inside an expanded row."
 
 Better placement: a small gear icon that appears at the top-right corner of the expanded inner table itself, or as part of the inner table's header row. This puts the control next to what it controls. The employee list can put its column picker in the toolbar because it controls the main (only) table. The payroll page has two table levels; the control should sit at the level it affects.
+
+### Phase 3: Column composable key mismatch (implementation hazard)
+
+The existing column customization composable auto-pins any column with the key `'actions'` (plural) -- it's always shown regardless of user selection. However, the payroll inner table's action column uses `key: 'action'` (singular). This means the composable would NOT auto-pin the Action column in the payroll table. If a user unchecks it in the column picker, the View/Payslip/Delete links would vanish with no way to interact with individual records.
+
+The fix is straightforward: either rename the inner table's action column key to `'actions'` to match the composable's convention, or explicitly include `'action'` in the default visible keys AND prevent it from appearing in the column picker's checkbox list. The safer approach is renaming to `'actions'` for consistency with the rest of the app.
 
 ### Phase 5: CSV export should respect grouping, not dump flat records
 
@@ -153,8 +159,9 @@ The main refinements needed are:
 1. **Decide the role of expansion vs. drawer** -- is the slim table a destination or a waypoint?
 2. **Limit sorting to non-aggregated fields** to avoid grouped-total mismatches
 3. **Place the column picker at the inner table level**, not the page toolbar
-4. **Specify CSV export structure** -- flat with context columns is the pragmatic choice
-5. **Validate the combined payslip need** before building the backend endpoint
+4. **Rename the inner table's action column key from `'action'` to `'actions'`** to match the composable's auto-pin convention -- otherwise the Action column becomes hideable and users can accidentally remove their only way to interact with records
+5. **Specify CSV export structure** -- flat with context columns is the pragmatic choice
+6. **Validate the combined payslip need** before building the backend endpoint
 
 None of these are blockers. Phase 1 can start immediately as planned. The refinements can be incorporated as each phase begins.
 

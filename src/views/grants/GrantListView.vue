@@ -36,7 +36,6 @@
         @change="handleTableChange"
         :expandedRowKeys="expandedKeys"
         @expandedRowsChange="(keys) => expandedKeys = keys"
-        :scroll="{ x: 'max-content' }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
@@ -60,53 +59,49 @@
           </template>
         </template>
 
-        <!-- Expanded row: Grant Positions -->
+        <!-- Expanded row: Grant Positions
+             The inner <a-table> must be the ONLY child so AntD's
+             .ant-table-wrapper:only-child margin rule applies (left indent).
+             The "Add Position" button goes in the #title slot instead. -->
         <template #expandedRowRender="{ record }">
-          <div class="expanded-section">
-            <div class="expanded-header">
-              <span class="expanded-title">Grant Positions</span>
-              <a-button
-                v-if="authStore.canCreate('grants')"
-                size="small"
-                type="primary"
-                @click="openCreatePosition(record)"
-              >
-                <PlusOutlined /> Add Position
-              </a-button>
-            </div>
-            <a-table
-              :columns="positionColumns"
-              :data-source="record.grant_items || []"
-              :row-key="(r) => r.id"
-              :pagination="false"
-              size="small"
-              :bordered="true"
-            >
-              <template #bodyCell="{ column, record: pos }">
-                <template v-if="column.key === 'grant_salary'">
-                  {{ formatCurrency(pos.grant_salary) }}
-                </template>
-                <template v-else-if="column.key === 'grant_benefit'">
-                  {{ formatCurrency(pos.grant_benefit) }}
-                </template>
-                <template v-else-if="column.key === 'grant_level_of_effort'">
-                  {{ pos.grant_level_of_effort != null ? `${(Number(pos.grant_level_of_effort) * 100).toFixed(0)}%` : '—' }}
-                </template>
-                <template v-else-if="column.key === 'cost_monthly'">
-                  {{ calcMonthlyCost(pos) }}
-                </template>
-                <template v-else-if="column.key === 'pos_actions'">
-                  <a-space>
-                    <a-button v-if="authStore.canUpdate('grants')" size="small" type="link" @click="openEditPosition(pos, record)">Edit</a-button>
-                    <a-button v-if="authStore.canDelete('grants')" size="small" type="link" danger @click="handleDeletePosition(pos)">Delete</a-button>
-                  </a-space>
-                </template>
+          <a-table
+            :columns="positionColumns"
+            :data-source="record.grant_items || []"
+            :row-key="(r) => r.id"
+            :pagination="false"
+            size="small"
+          >
+            <template v-if="authStore.canCreate('grants')" #title>
+              <div class="expanded-add-btn">
+                <a-button size="small" type="primary" @click="openCreatePosition(record)">
+                  <PlusOutlined /> Add Position
+                </a-button>
+              </div>
+            </template>
+            <template #bodyCell="{ column, record: pos }">
+              <template v-if="column.key === 'grant_salary'">
+                {{ formatCurrency(pos.grant_salary) }}
               </template>
-              <template #emptyText>
-                <span class="text-muted">No positions added yet</span>
+              <template v-else-if="column.key === 'grant_benefit'">
+                {{ formatCurrency(pos.grant_benefit) }}
               </template>
-            </a-table>
-          </div>
+              <template v-else-if="column.key === 'grant_level_of_effort'">
+                {{ fmtFte(pos.grant_level_of_effort) }}
+              </template>
+              <template v-else-if="column.key === 'cost_monthly'">
+                {{ calcMonthlyCost(pos) }}
+              </template>
+              <template v-else-if="column.key === 'pos_actions'">
+                <a-space>
+                  <a-button v-if="authStore.canUpdate('grants')" size="small" type="link" @click="openEditPosition(pos, record)">Edit</a-button>
+                  <a-button v-if="authStore.canDelete('grants')" size="small" type="link" danger @click="handleDeletePosition(pos)">Delete</a-button>
+                </a-space>
+              </template>
+            </template>
+            <template #emptyText>
+              <span class="text-muted">No positions added yet</span>
+            </template>
+          </a-table>
         </template>
       </a-table>
     </a-card>
@@ -248,7 +243,7 @@ import { useAbortController } from '@/composables/useAbortController'
 import { useSaveAnother } from '@/composables/useSaveAnother'
 import { grantApi, grantItemApi } from '@/api'
 import { ORG_OPTIONS, getOrgColor, ORG_RECORD_VIEW_CONFIG } from '@/constants/organizations'
-import { formatCurrency, formatDate } from '@/utils/formatters'
+import { formatCurrency, formatDate, fmtFte } from '@/utils/formatters'
 import RecordView from '@/components/common/RecordView.vue'
 
 const appStore = useAppStore()
@@ -286,23 +281,23 @@ const posForm = reactive({
 })
 
 const columns = [
-  { title: 'Organization', key: 'organization', width: 120, align: 'center' },
-  { title: 'Grant Code', key: 'code', width: 150 },
+  { title: 'Organization', key: 'organization', align: 'center' },
+  { title: 'Grant Code', key: 'code' },
   { title: 'Grant Name', dataIndex: 'name', ellipsis: true },
   { title: 'Description', dataIndex: 'description', ellipsis: true },
-  { title: 'End Date', key: 'end_date', width: 140 },
-  { title: '', key: 'actions', width: 140, align: 'right' },
+  { title: 'End Date', key: 'end_date' },
+  { title: '', key: 'actions', align: 'right' },
 ]
 
 const positionColumns = [
-  { title: 'Position Title', dataIndex: 'grant_position', width: 160 },
-  { title: 'Budget Line Code', dataIndex: 'budgetline_code', width: 140 },
-  { title: 'Salary (THB)', key: 'grant_salary', width: 130, align: 'right' },
-  { title: 'Benefit (THB)', key: 'grant_benefit', width: 130, align: 'right' },
-  { title: 'Effort (%)', key: 'grant_level_of_effort', width: 100, align: 'center' },
-  { title: 'Position No.', dataIndex: 'grant_position_number', width: 110, align: 'center' },
-  { title: 'Cost Monthly', key: 'cost_monthly', width: 130, align: 'right' },
-  { title: '', key: 'pos_actions', width: 130, align: 'right' },
+  { title: 'Position Title', dataIndex: 'grant_position' },
+  { title: 'Budget Line Code', dataIndex: 'budgetline_code' },
+  { title: 'Salary (THB)', key: 'grant_salary', align: 'right' },
+  { title: 'Benefit (THB)', key: 'grant_benefit', align: 'right' },
+  { title: 'Effort (%)', key: 'grant_level_of_effort', align: 'center' },
+  { title: 'Position No.', dataIndex: 'grant_position_number', align: 'center' },
+  { title: 'Cost Monthly', key: 'cost_monthly', align: 'right' },
+  { title: '', key: 'pos_actions', align: 'right' },
 ]
 
 const tablePagination = computed(() => ({
@@ -572,9 +567,9 @@ const viewSections = computed(() => {
   })
 
   if (g.grant_items?.length > 0) {
-    const items = g.grant_items
+    const grantItems = g.grant_items
     let totalLoe = 0, totalSalary = 0, totalBenefit = 0
-    items.forEach(item => {
+    grantItems.forEach(item => {
       totalLoe += Number(item.grant_level_of_effort) || 0
       totalSalary += Number(item.grant_salary) || 0
       totalBenefit += Number(item.grant_benefit) || 0
@@ -585,16 +580,16 @@ const viewSections = computed(() => {
       headers: ['#', 'Position', 'Budgetline', 'LOE', 'Salary', 'Benefit'],
       aligns: { 0: 'text-center', 3: 'text-center', 4: 'text-right', 5: 'text-right' },
       monoCols: [0, 2, 3, 4, 5],
-      rows: items.map(item => [
+      rows: grantItems.map(item => [
         String(item.grant_position_number ?? '—'),
         item.grant_position ?? '—',
         item.budgetline_code ?? '—',
-        item.grant_level_of_effort != null ? String(item.grant_level_of_effort) : '—',
+        fmtFte(item.grant_level_of_effort),
         item.grant_salary != null ? formatCurrency(item.grant_salary) : '—',
         item.grant_benefit != null ? formatCurrency(item.grant_benefit) : '—',
       ]),
       summary: {
-        label: `Total (${items.length} items)`,
+        label: `Total (${grantItems.length} items)`,
         colspan: 3,
         values: [
           totalLoe ? totalLoe.toFixed(2) : '—',
@@ -670,19 +665,9 @@ onMounted(() => {
 .cell-code { font-weight: 600; }
 .modal-form { margin-top: 16px; }
 
-.expanded-section {
-  padding: 4px 0;
-}
-.expanded-header {
+.expanded-add-btn {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.expanded-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  justify-content: flex-end;
 }
 
 /* ── Record View Modal ── */
@@ -714,7 +699,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 .view-close-btn:hover {
   background: rgba(255,255,255,0.35);
@@ -727,49 +712,3 @@ onMounted(() => {
 }
 </style>
 
-<!--
-  Unscoped: override Ant Design modal internals for record-view-modal.
-
-  Why these overrides are needed:
-  - global.less sets .ant-modal-content { overflow: hidden } which clips content
-  - Ant Design's centered modal uses flexbox on the wrap — we let the wrap scroll
-    naturally for tall content instead of constraining with max-height
-  - The RecordView component handles its own border-radius/shadow, so we strip
-    the Ant Design chrome (padding, background, box-shadow) from the modal shell
--->
-<style>
-/* Wrap: let Ant's default overflow:auto handle scroll for tall modals */
-.record-view-modal .ant-modal-wrap {
-  overflow: auto;
-}
-
-/* Modal: breathing room from viewport edges */
-.record-view-modal .ant-modal {
-  padding: 24px 0;
-}
-
-/* Content: strip Ant chrome, override global overflow:hidden */
-.record-view-modal .ant-modal-content {
-  padding: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 10px !important;
-  overflow: visible !important;
-}
-
-/* Body: no padding, RecordView fills the space */
-.record-view-modal .ant-modal-body {
-  padding: 0 !important;
-  background: transparent !important;
-}
-
-/* Hide Ant's default header bar */
-.record-view-modal .ant-modal-header {
-  display: none !important;
-}
-
-/* Hide Ant's default close — we use our own inside the card */
-.record-view-modal .ant-modal-close {
-  display: none !important;
-}
-</style>

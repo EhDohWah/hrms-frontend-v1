@@ -341,6 +341,7 @@ const allocColumns = [
   { title: 'Sal. Increase', key: 'salary_increase', width: 100, align: 'right' },
   { title: 'Retroactive', key: 'retroactive_salary', width: 95, align: 'right' },
   { title: '13th Month', key: 'thirteen_month', width: 95, align: 'right' },
+  { title: '13th Accrue', key: 'thirteen_month_salary_accured', width: 95, align: 'right', customHeaderCell: () => ({ title: '13th Month Salary Accrued' }) },
   { title: 'Bonus', key: 'salary_bonus', width: 85, align: 'right' },
   { title: 'Total Income', key: 'total_income', width: 100, align: 'right' },
   // Deductions
@@ -595,6 +596,7 @@ function getAllocValue(alloc, key) {
     salary_increase: alloc.calculation_breakdown?.step_1_salary_determination?.annual_increase_by_fte,
     retroactive_salary: alloc.income_additions?.retroactive_salary,
     thirteen_month: alloc.income_additions?.thirteen_month,
+    thirteen_month_salary_accured: alloc.income_additions?.thirteen_month_accrued,
     salary_bonus: alloc.income_additions?.salary_bonus,
     total_income: alloc.total_income,
     pvd: alloc.deductions?.pvd,
